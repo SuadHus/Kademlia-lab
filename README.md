@@ -1,2 +1,2 @@
 # Kademlia-lab
-Kademlia implementetion using GO 
+Kademlia implementetion using GO.
