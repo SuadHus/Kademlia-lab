@@ -1,7 +1,6 @@
-package d7024e
+package kademlia
 
 const bucketSize = 20
-
 
 // RoutingTable definition
 // keeps a refrence contact of me and an array of buckets
