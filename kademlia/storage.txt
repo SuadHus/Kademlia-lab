@@ -1,4 +1,4 @@
-package d7024e
+package kademlia
 
 import (
 	"container/list"
@@ -38,7 +38,7 @@ func (bucket *bucket) AddContact(contact Contact) {
 	}
 }
 
-// GetContactAndCalcDistance returns an array of Contacts where 
+// GetContactAndCalcDistance returns an array of Contacts where
 // the distance has already been calculated
 func (bucket *bucket) GetContactAndCalcDistance(target *KademliaID) []Contact {
 	var contacts []Contact
@@ -56,17 +56,60 @@ func (bucket *bucket) GetContactAndCalcDistance(target *KademliaID) []Contact {
 func (bucket *bucket) Len() int {
 	return bucket.list.Len()
 }
-package d7024e
+package kademlia
 
+import (
+	"fmt"
+	"net"
+)
+
+// Network struct definition
 type Network struct {
+	localID   *KademliaID
+	localAddr string
 }
 
+// Listen starts a listener on the specified IP and port
 func Listen(ip string, port int) {
-	// TODO
+	addr := fmt.Sprintf("%s:%d", ip, port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		fmt.Println("Error starting the listener:", err)
+		return
+	}
+	defer listener.Close()
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection:", err)
+			continue
+		}
+		go handleConnection(conn)
+	}
 }
 
+// handleConnection handles incoming messages
+func handleConnection(conn net.Conn) {
+	fmt.Println("Handling connection from:", conn.RemoteAddr())
+	defer conn.Close()
+	// Handle incoming messages here TODO LATER
+}
+
+// SendPingMessage sends a ping message to the given contact
 func (network *Network) SendPingMessage(contact *Contact) {
-	// TODO
+	conn, err := net.Dial("tcp", contact.Address)
+	if err != nil {
+		fmt.Println("Error connecting to contact:", err)
+		return
+	}
+	defer conn.Close()
+
+	message := fmt.Sprintf("PING from %s", network.localID.String())
+	_, err = conn.Write([]byte(message))
+	if err != nil {
+		fmt.Println("Error sending ping message:", err)
+	}
 }
 
 func (network *Network) SendFindContactMessage(contact *Contact) {
@@ -80,7 +123,10 @@ func (network *Network) SendFindDataMessage(hash string) {
 func (network *Network) SendStoreMessage(data []byte) {
 	// TODO
 }
-package d7024e
+// TODO: Add package documentation for `kademlia`, like this:
+// Package kademlia something something...
+package kademlia
+package kademlia
 
 import (
 	"encoding/hex"
@@ -135,7 +181,7 @@ func (kademliaID KademliaID) Equals(otherKademliaID *KademliaID) bool {
 	return true
 }
 
-// CalcDistance returns a new instance of a KademliaID that is built 
+// CalcDistance returns a new instance of a KademliaID that is built
 // through a bitwise XOR operation betweeen kademliaID and target
 func (kademliaID KademliaID) CalcDistance(target *KademliaID) *KademliaID {
 	result := KademliaID{}
@@ -149,7 +195,7 @@ func (kademliaID KademliaID) CalcDistance(target *KademliaID) *KademliaID {
 func (kademliaID *KademliaID) String() string {
 	return hex.EncodeToString(kademliaID[0:IDLength])
 }
-package d7024e
+package kademlia
 
 type Kademlia struct {
 }
@@ -165,7 +211,7 @@ func (kademlia *Kademlia) LookupData(hash string) {
 func (kademlia *Kademlia) Store(data []byte) {
 	// TODO
 }
-package d7024e
+package kademlia
 
 import (
 	"fmt"
@@ -185,7 +231,7 @@ func NewContact(id *KademliaID, address string) Contact {
 	return Contact{id, address, nil}
 }
 
-// CalcDistance calculates the distance to the target and 
+// CalcDistance calculates the distance to the target and
 // fills the contacts distance field
 func (contact *Contact) CalcDistance(target *KademliaID) {
 	contact.distance = contact.ID.CalcDistance(target)
@@ -233,15 +279,14 @@ func (candidates *ContactCandidates) Swap(i, j int) {
 	candidates.contacts[i], candidates.contacts[j] = candidates.contacts[j], candidates.contacts[i]
 }
 
-// Less returns true if the Contact at index i is smaller than 
+// Less returns true if the Contact at index i is smaller than
 // the Contact at index j
 func (candidates *ContactCandidates) Less(i, j int) bool {
 	return candidates.contacts[i].Less(&candidates.contacts[j])
 }
-package d7024e
+package kademlia
 
 const bucketSize = 20
-
 
 // RoutingTable definition
 // keeps a refrence contact of me and an array of buckets
@@ -308,12 +353,15 @@ func (routingTable *RoutingTable) getBucketIndex(id *KademliaID) int {
 
 	return IDLength*8 - 1
 }
-package d7024e
+package kademlia
 
 import (
 	"fmt"
 	"testing"
 )
+
+// FIXME: This test doesn't actually test anything. There is only one assertion
+// that is included as an example.
 
 func TestRoutingTable(t *testing.T) {
 	rt := NewRoutingTable(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "localhost:8000"))
@@ -328,5 +376,10 @@ func TestRoutingTable(t *testing.T) {
 	contacts := rt.FindClosestContacts(NewKademliaID("2111111400000000000000000000000000000000"), 20)
 	for i := range contacts {
 		fmt.Println(contacts[i].String())
+	}
+
+	// TODO: This is just an example. Make more meaningful assertions.
+	if len(contacts) != 6 {
+		t.Fatalf("Expected 6 contacts but instead got %d", len(contacts))
 	}
 }

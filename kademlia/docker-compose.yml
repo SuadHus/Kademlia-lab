@@ -1,0 +1,31 @@
+version: '3'
+
+services:
+  kademlia_node_1:
+    build: .
+    environment:
+      - NODE_ADDRESS=172.16.238.10:8080
+      - CONTACT_ADDRESS=172.16.238.11:8080  # The IP of node_2
+    networks:
+      kademlia_network:
+        ipv4_address: 172.16.238.10
+    ports:
+      - "8080:8080"
+
+  kademlia_node_2:
+    build: .
+    environment:
+      - NODE_ADDRESS=172.16.238.11:8080
+      - CONTACT_ADDRESS=172.16.238.10:8080  # The IP of node_1
+    networks:
+      kademlia_network:
+        ipv4_address: 172.16.238.11
+    ports:
+      - "8081:8080"  # Expose this on a different host port to avoid conflict
+
+networks:
+  kademlia_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.238.0/24
