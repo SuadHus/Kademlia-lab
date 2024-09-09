@@ -10,12 +10,11 @@ func main() {
 	fmt.Println("Starting Kademlia network...")
 
 	// Retrieve the node's address and peer's contact address from environment variables
-	localAddr := os.Getenv("NODE_ADDRESS")
+	localAddr := os.Getenv("CONTAINER_IP")
 	contactAddr := os.Getenv("CONTACT_ADDRESS")
 
 	if localAddr == "" || contactAddr == "" {
 		fmt.Println("NODE_ADDRESS or CONTACT_ADDRESS not set in environment")
-		return
 	}
 
 	// Example network initialization for this node
@@ -28,10 +27,15 @@ func main() {
 	go kademlia.Listen("0.0.0.0", 8080)
 
 	// Create a contact for the peer node
-	contact := kademlia.NewContact(kademlia.NewRandomKademliaID(), contactAddr)
+	if contactAddr != "" {
+		contact := kademlia.NewContact(kademlia.NewRandomKademliaID(), contactAddr)
+		network.SendPingMessage(&contact)
+
+	} else {
+		fmt.Println("CONTACT_ADDRESS not set in environment")
+	}
 
 	// Send a ping to the peer node
-	network.SendPingMessage(&contact)
 
 	// Keep the application running
 	select {}

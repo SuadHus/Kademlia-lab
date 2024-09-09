@@ -1,31 +1,27 @@
 version: '3'
 
 services:
-  kademlia_node_1:
-    build: .
-    environment:
-      - NODE_ADDRESS=172.16.238.10:8080
-      - CONTACT_ADDRESS=172.16.238.11:8080  # The IP of node_2
+  root_node:
+    image: kademlia-app
     networks:
       kademlia_network:
-        ipv4_address: 172.16.238.10
+        ipv4_address: 172.16.238.10  # Static IP for the root node
     ports:
-      - "8080:8080"
+      - "8080:8080"  # Expose root node's port to host for debugging purposes
 
-  kademlia_node_2:
-    build: .
+  kademlia_node:
+    image: kademlia-app
     environment:
-      - NODE_ADDRESS=172.16.238.11:8080
-      - CONTACT_ADDRESS=172.16.238.10:8080  # The IP of node_1
+      - CONTACT_ADDRESS=172.16.238.10:8080  # Contact root node via its static IP
     networks:
-      kademlia_network:
-        ipv4_address: 172.16.238.11
-    ports:
-      - "8081:8080"  # Expose this on a different host port to avoid conflict
+      - kademlia_network
+    deploy:
+      replicas: 10
+
 
 networks:
   kademlia_network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.16.238.0/24
+        - subnet: 172.16.238.0/24  # Manually configure the subnet for static IPs
