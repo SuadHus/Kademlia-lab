@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  kademlia_node:
+    build: .
+    scale: 50
+    networks:
+      - kademlia_network
+    ports:
+      - "8080"
+    deploy:
+      replicas: 50
+    command: ["./myapp"]
+
+networks:
+  kademlia_network:
+    driver: bridge
+
+
