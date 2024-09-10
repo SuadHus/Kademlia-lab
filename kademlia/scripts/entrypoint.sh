@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Get the dynamically assigned IP address of the container
 CONTAINER_IP=$(hostname -i)

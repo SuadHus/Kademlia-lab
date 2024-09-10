@@ -23,7 +23,7 @@ RUN go build -o kademlia_app ./cmd/main.go
 EXPOSE 8080
 
 # Set the entrypoint to the entrypoint script
-ENTRYPOINT ["scripts/entrypoint.sh"]
+ENTRYPOINT ["./scripts/entrypoint.sh"]
 
 # Run the Go application (this gets executed after the entrypoint script)
 CMD ["./kademlia_app"]
