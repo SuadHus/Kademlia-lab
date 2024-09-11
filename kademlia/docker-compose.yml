@@ -8,6 +8,9 @@ services:
         ipv4_address: 172.16.238.10  # Static IP for the root node
     ports:
       - "8080:8080"  # Expose root node's port to host for debugging purposes
+    environment:
+      - ROOT_NODE=TRUE
+
 
   kademlia_node:
     image: kademlia-app
