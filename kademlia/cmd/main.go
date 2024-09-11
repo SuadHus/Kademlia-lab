@@ -26,18 +26,18 @@ func main() {
 	// Start listening on the node's address
 	go kademlia.Listen("0.0.0.0", 8080)
 
-	// // Create a contact for the peer node
-	// if rootAddr != "" {
-	// 	contact := kademlia.NewContact(kademlia.NewRandomKademliaID(), rootAddr)
-	// 	network.SendPingMessage(&contact)
+	// Create a contact for the peer node
+	if rootAddr != "" {
+		contact := kademlia.NewContact(kademlia.NewRandomKademliaID(), rootAddr)
+		network.SendPingMessage(&contact)
 
-	// } else {
-	// 	fmt.Println("ROOT_ADDRESS not set in environment")
-	// }
+	} else {
+		fmt.Println("ROOT_ADDRESS not set in environment")
+	}
 
 	// Send a ping to the root node
-	contact := kademlia.Contact{Address: rootAddr}
-	network.SendPingMessage(&contact)
+	//contact := kademlia.Contact{Address: rootAddr}
+	//network.SendPingMessage(&contact)
 
 	// Keep the application running
 	select {}

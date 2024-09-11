@@ -28,45 +28,76 @@ func Listen(ip string, port int) {
 			continue
 		}
 
+		// parse in async parallell
 		go parseConnection(conn)
 
 		// shall handle ping etc...
-		go handleConnection(conn)
+		//go handleConnection(conn)
 	}
 }
 
 func parseConnection(conn net.Conn) {
 	defer conn.Close()
+	originIP := conn.RemoteAddr().String()
 
 	// Create a buffer to store the incoming data
 	buffer := make([]byte, 1024)
 	n, err := conn.Read(buffer)
 	if err != nil {
 		fmt.Println("Error reading from connection:", err)
+		conn.Close()
 		return
 	}
 
-	// convert buffer to string and trim whithespaces
+	// Convert buffer to string and trim whitespaces
 	message := string(buffer[:n])
 	message = strings.TrimSpace(message)
 
 	switch {
 	case strings.HasPrefix(message, "PING"):
-		fmt.Println("Received PING message:", message)
-		handlePingConnection(conn) // Delegate to handlePingConnection for PING
+		fmt.Println("Received PING message:", message, "FROM: ", originIP)
+		handlePingMsgs(originIP)
 
-	case strings.HasPrefix(message, "HELLO"):
-		fmt.Println("Received HELLO message:", message)
-		// Add logic for handling HELLO messages here
-
-	case strings.HasPrefix(message, "BYE"):
-		fmt.Println("Received BYE message:", message)
-		// Add logic for handling BYE messages here
+	case strings.HasPrefix(message, "PONG"):
+		fmt.Println("Received PONG message:", message, "FROM: ", originIP)
+		handlePongMsgs(originIP)
 
 	default:
 		fmt.Println("Received unknown message:", message)
-		// Handle unknown message types here
 	}
+}
+
+func handlePingMsgs(pingOriginAddr string) {
+	pingOriginIP, _, err := net.SplitHostPort(pingOriginAddr)
+	if err != nil {
+		fmt.Println("Error extracting IP from origin address:", err)
+		return
+	}
+
+	// Set the PONG response to be sent to the PING origin IP on port 8080
+	pingOriginWithPort := net.JoinHostPort(pingOriginIP, "8080")
+
+	conn, err := net.Dial("tcp", pingOriginWithPort)
+	if err != nil {
+		fmt.Println("Error connecting back to origin IP on port 8080:", err)
+		return
+	}
+	defer conn.Close()
+
+	// Send a PONG message with the local server IP
+	localAddr := conn.LocalAddr().String()
+	pongMessage := "PONG from: " + localAddr
+	_, err = conn.Write([]byte(pongMessage))
+	if err != nil {
+		fmt.Println("Error sending PONG response:", err)
+		return
+	}
+
+	fmt.Println("Sent PONG message with server IP:", localAddr, "to", pingOriginWithPort)
+}
+
+func handlePongMsgs(pongOriginIP string) {
+	fmt.Println("GOT pong msgs from: ", pongOriginIP)
 }
 
 // handleConnection handles incoming messages
@@ -74,20 +105,6 @@ func handleConnection(conn net.Conn) {
 	fmt.Println("Handling connection from:", conn.RemoteAddr())
 	defer conn.Close()
 	// Handle incoming messages here TODO LATER
-}
-
-func handlePingConnection(conn net.Conn) {
-	localAddr := conn.LocalAddr().String()
-
-	// PONG answer with the recipient ip of the original PING
-	pongMessage := "PONG from:" + localAddr
-	_, err := conn.Write([]byte(pongMessage))
-	if err != nil {
-		fmt.Println("Error sending PONG response:", err)
-		return
-	}
-
-	fmt.Println("Sent PONG message with server IP:", localAddr)
 }
 
 // SendPingMessage sends a ping message to the given contact
