@@ -84,7 +84,6 @@ func handlePingMsgs(pingOriginAddr string) {
 	}
 	defer conn.Close()
 
-	// Send a PONG message with the local server IP
 	localAddr := conn.LocalAddr().String()
 	pongMessage := "PONG from: " + localAddr
 	_, err = conn.Write([]byte(pongMessage))
