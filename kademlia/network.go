@@ -37,7 +37,7 @@ func parseConnection(conn net.Conn) {
 	defer conn.Close()
 
 	// Create a buffer to store the incoming data
-	buffer := make([]byte, 1024) // Adjust the buffer size as needed
+	buffer := make([]byte, 1024)
 	n, err := conn.Read(buffer)
 	if err != nil {
 		fmt.Println("Error reading from connection:", err)

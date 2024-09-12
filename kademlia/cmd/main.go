@@ -12,16 +12,14 @@ func main() {
 	// Retrieve the node's address and peer's contact address from environment variables
 	localAddr := os.Getenv("CONTAINER_IP")
 	contactAddr := os.Getenv("CONTACT_ADDRESS")
-
-	if localAddr == "" || contactAddr == "" {
-		fmt.Println("NODE_ADDRESS or CONTACT_ADDRESS not set in environment")
+	//contactAddr := os.Getenv("CONTACT_ADDRESS")
+	if localAddr == "" {
+		// handle the error (e.g., exit or provide a default IP)
+		localAddr = "127.0.0.1" // Use a default value if environment variable is not set
 	}
 
-	// Example network initialization for this node
-	network := kademlia.Network{
-		LocalID:   kademlia.NewRandomKademliaID(),
-		LocalAddr: localAddr,
-	}
+	// Create a new Kademlia instance
+	myKademlia := kademlia.NewKademlia(localAddr)
 
 	// Start listening on the node's address
 	go kademlia.Listen("0.0.0.0", 8080)
@@ -29,7 +27,7 @@ func main() {
 	// Create a contact for the peer node
 	if contactAddr != "" {
 		contact := kademlia.NewContact(kademlia.NewRandomKademliaID(), contactAddr)
-		network.SendPingMessage(&contact)
+		myKademlia.Network.SendPingMessage(&contact)
 
 	} else {
 		fmt.Println("CONTACT_ADDRESS not set in environment")
