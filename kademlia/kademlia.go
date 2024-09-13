@@ -1,8 +1,11 @@
 package kademlia
 
+import "fmt"
+
 // Kademlia represents the Kademlia distributed hash table.
 type Kademlia struct {
-	Network *Network
+	Network      *Network
+	RoutingTable *RoutingTable
 }
 
 // NewKademlia initializes a new Kademlia instance.
@@ -11,9 +14,16 @@ func NewKademlia(localAddr string) *Kademlia {
 		LocalID:   NewRandomKademliaID(),
 		LocalAddr: localAddr,
 	}
+
+	newContact := NewContact(NewRandomKademliaID(), localAddr)
+
+	routingTable := NewRoutingTable(newContact)
+	fmt.Println("New Kademlia instance created", routingTable)
 	return &Kademlia{
-		Network: network,
+		Network:      network,
+		RoutingTable: routingTable,
 	}
+
 }
 
 func (kademlia *Kademlia) LookupContact(target *Contact) {

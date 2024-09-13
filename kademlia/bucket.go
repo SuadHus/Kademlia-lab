@@ -37,7 +37,7 @@ func (bucket *bucket) AddContact(contact Contact) {
 	} else {
 		bucket.list.MoveToFront(element)
 	}
-	fmt.Println("Received BYE message:", bucket.list)
+	fmt.Println("Received BYE message: ", bucket.list)
 }
 
 // GetContactAndCalcDistance returns an array of Contacts where
