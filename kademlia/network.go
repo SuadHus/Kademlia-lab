@@ -59,7 +59,7 @@ func parseConnection(conn net.Conn) {
 		handlePingMsgs(originIP)
 
 	case strings.HasPrefix(message, "PONG"):
-		fmt.Println("Received PONG message:", message, "FROM: ", originIP)
+		fmt.Println("Received PONG message:", message)
 		handlePongMsgs(originIP)
 
 	default:
@@ -96,7 +96,7 @@ func handlePingMsgs(pingOriginAddr string) {
 }
 
 func handlePongMsgs(pongOriginIP string) {
-	fmt.Println("GOT pong msgs from: ", pongOriginIP)
+	fmt.Println("inside handlePongMsgs with pongOriginIP: ", pongOriginIP)
 }
 
 // handleConnection handles incoming messages

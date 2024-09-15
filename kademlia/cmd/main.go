@@ -24,7 +24,6 @@ func main() {
 	if rootAddr != "" {
 		rootContact := kademlia.NewContact(kademlia.NewRandomKademliaID(), rootAddr)
 		myKademlia.Network.SendPingMessage(&rootContact)
-
 	} else {
 		fmt.Println("Root node does not init ping")
 	}
