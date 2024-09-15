@@ -19,7 +19,7 @@ func main() {
 	}
 
 	// Create a new Kademlia instance
-	myKademlia := kademlia.NewKademlia(localAddr)
+	MyKademlia := kademlia.NewKademlia(localAddr)
 
 	// Start listening on the node's address
 	go kademlia.Listen("0.0.0.0", 8080)
@@ -27,7 +27,7 @@ func main() {
 	// Create a contact for the peer node
 	if contactAddr != "" {
 		contact := kademlia.NewContact(kademlia.NewRandomKademliaID(), contactAddr)
-		myKademlia.Network.SendPingMessage(&contact)
+		MyKademlia.Network.SendPingMessage(&contact)
 
 	} else {
 		fmt.Println("CONTACT_ADDRESS not set in environment")

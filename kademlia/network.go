@@ -51,6 +51,7 @@ func parseConnection(conn net.Conn) {
 	// Use a switch case to handle different message types
 	switch {
 	case strings.HasPrefix(message, "PING"):
+		fmt.Print()
 		go handlePingMessage(conn, message)
 
 	case strings.HasPrefix(message, "PONG"):
