@@ -2,42 +2,28 @@ package kademlia
 
 import (
 	"fmt"
-	"os"
 )
 
 type Kademlia struct {
-	network      *Network
-	routingTable *RoutingTable
+	Network      *Network
+	RoutingTable *RoutingTable
 }
 
-func initKademlia() {
+func InitKademlia(localAddr string) *Kademlia {
 
-	localAddr := os.Getenv("CONTAINER_IP")
-	rootAddr := os.Getenv("ROOT_ADDRESS")
-
-	// Create the network instance
 	networkZero := &Network{
 		LocalID:   NewRandomKademliaID(),
 		LocalAddr: localAddr,
 	}
 
 	me := NewContact(NewRandomKademliaID(), localAddr)
-	rootContact := NewContact(NewRandomKademliaID(), rootAddr)
-
 	routingTableZero := NewRoutingTable(me)
+	fmt.Println("Kademliainstance Created with routingtable:", routingTableZero)
 
-	// Initialize the Kademlia instance and set the network
-	kademliaInstance := &Kademlia{
-		network:      networkZero,
-		routingTable: routingTableZero,
-	}
-
-	// Create a contact for the peer node
-	if rootAddr != "" {
-		networkZero.SendPingMessage(&rootContact)
-
-	} else {
-		fmt.Println("ROOT_ADDRESS not set in environment")
+	// Initi kademlia and set its network
+	return &Kademlia{
+		Network:      networkZero,
+		RoutingTable: routingTableZero,
 	}
 
 }
