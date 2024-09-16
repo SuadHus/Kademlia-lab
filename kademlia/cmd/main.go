@@ -18,12 +18,12 @@ func main() {
 	myKademlia := kademlia.InitKademlia(localAddr)
 
 	// Start listening for incoming msgs on port 8080
-	go kademlia.Listen("0.0.0.0", 8080)
+	go myKademlia.Network.Listen("0.0.0.0", 8080)
 
 	// Create a contact for the peer node
 	if rootAddr != "" {
 		rootContact := kademlia.NewContact(kademlia.NewRandomKademliaID(), rootAddr)
-		myKademlia.Network.SendPingMessage(&rootContact)
+		myKademlia.Network.SendBootstrapInitPing(rootContact)
 	} else {
 		fmt.Println("Root node does not init ping")
 	}

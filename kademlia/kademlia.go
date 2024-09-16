@@ -17,30 +17,27 @@ type Msgs struct {
 }
 
 func InitKademlia(localAddr string) *Kademlia {
-
 	pingPongCh := make(chan Msgs)
 
-	networkZero := &Network{
+	myNetwork := &Network{
 		LocalID:    NewRandomKademliaID(),
 		LocalAddr:  localAddr,
 		pingPongCh: pingPongCh,
 	}
 
 	me := NewContact(NewRandomKademliaID(), localAddr)
-	routingTableZero := NewRoutingTable(me)
-	fmt.Println("Kademliainstance Created with routingtable:", routingTableZero)
+	myRoutingTable := NewRoutingTable(me)
 
 	// Initi kademlia and set its network
 	return &Kademlia{
-		Network:      networkZero,
-		RoutingTable: routingTableZero,
+		Network:      myNetwork,
+		RoutingTable: myRoutingTable,
 		Me:           &me,
 		pingPongCh:   pingPongCh,
 	}
-
 }
 
-func (k *Kademlia) ListenForMessages() {
+func (k *Kademlia) ListenForMsgs() {
 	go func() {
 		for msgs := range k.pingPongCh {
 			switch msgs.MsgsType {
