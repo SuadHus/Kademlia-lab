@@ -257,6 +257,7 @@ func (kademlia *Kademlia) Store(data []byte) string {
 	// Compute the hash of the data
 	hash := sha1.Sum(data)
 	hashString := hex.EncodeToString(hash[:])
+	fmt.Println("Storing data with hash:", hashString)
 
 	// Find the k closest nodes to the hash
 	targetID := NewKademliaID(hashString)

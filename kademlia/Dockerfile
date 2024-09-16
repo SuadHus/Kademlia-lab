@@ -21,6 +21,7 @@ RUN go build -o kademlia_app ./cmd/main.go
 
 # Expose the port your application will run on
 EXPOSE 8080
+EXPOSE 8081
 
 # Set the entrypoint to the entrypoint script
 ENTRYPOINT ["scripts/entrypoint.sh"]

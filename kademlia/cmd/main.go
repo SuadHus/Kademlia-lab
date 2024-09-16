@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"kademlia"
+	"net/http"
 	"os"
 )
 
@@ -30,33 +32,35 @@ func main() {
 		fmt.Println("CONTACT_ADDRESS not set in environment")
 	}
 
-	// Command line interface
-	// reader := bufio.NewReader(os.Stdin)
-	// for {
-	// 	fmt.Print("Enter command (put/get/exit): ")
-	// 	text, _ := reader.ReadString('\n')
-	// 	text = strings.TrimSpace(text)
-	// 	if text == "exit" {
-	// 		fmt.Println("Exiting...")
-	// 		os.Exit(0)
-	// 	} else if strings.HasPrefix(text, "put ") {
-	// 		data := strings.TrimPrefix(text, "put ")
-	// 		dataBytes := []byte(data)
-	// 		hash := myKademlia.Store(dataBytes)
-	// 		fmt.Println("Data stored with hash:", hash)
-	// 	} else if strings.HasPrefix(text, "get ") {
-	// 		hash := strings.TrimPrefix(text, "get ")
-	// 		data, err := myKademlia.LookupData(hash)
-	// 		if err != nil {
-	// 			fmt.Println("Error retrieving data:", err)
-	// 		} else {
-	// 			fmt.Println("Data retrieved:", string(data))
-	// 		}
-	// 	} else {
-	// 		fmt.Println("Unknown command:", text)
-	// 	}
-	// }
+	// Set up HTTP handlers
+	http.HandleFunc("/put", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		data := r.FormValue("data")
+		hash := myKademlia.Store([]byte(data))
+		fmt.Fprintf(w, "Data stored with hash: %s", hash)
+	})
+
+	http.HandleFunc("/get", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		hash := r.URL.Query().Get("hash")
+		data, err := myKademlia.LookupData(hash)
+		if err != nil {
+			http.Error(w, "Data not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"data": string(data)})
+	})
+
+	// Start HTTP server
+	fmt.Println("HTTP server listening on port 8001")
+	http.ListenAndServe(":8001", nil)
 
 	select {}
-
 }
