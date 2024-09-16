@@ -18,7 +18,7 @@ services:
     networks:
       - kademlia_network
     deploy:
-      replicas: 10
+      replicas: 1
 
 
 networks:

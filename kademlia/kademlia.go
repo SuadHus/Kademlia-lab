@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"net"
 	"sort"
 	"strings"
 )
@@ -40,43 +39,63 @@ func NewKademlia(localAddr string) *Kademlia {
 }
 
 // HandleMessage implements the MessageHandler interface
-func (kademlia *Kademlia) HandleMessage(message string, conn net.Conn) {
+func (kademlia *Kademlia) HandleMessage(message string, senderAddr string) string {
 	switch {
 	case strings.HasPrefix(message, "PING"):
-		kademlia.handlePingMessage(conn, message)
+		return kademlia.handlePingMessage(message, senderAddr)
 	case strings.HasPrefix(message, "PONG"):
-		// Handle PONG if needed
+		kademlia.handlePongMessage(message, senderAddr)
+		return ""
 	case strings.HasPrefix(message, "FIND_NODE"):
-		kademlia.handleFindNodeMessage(conn, message)
+		return kademlia.handleFindNodeMessage(message, senderAddr)
 	case strings.HasPrefix(message, "FIND_VALUE"):
-		kademlia.handleFindValueMessage(conn, message)
+		return kademlia.handleFindValueMessage(message, senderAddr)
 	case strings.HasPrefix(message, "STORE"):
-		kademlia.handleStoreMessage(conn, message)
+		return kademlia.handleStoreMessage(message, senderAddr)
 	default:
 		fmt.Println("Received unknown message:", message)
+		return ""
 	}
 }
 
-func (kademlia *Kademlia) handlePingMessage(conn net.Conn, message string) {
-	fmt.Println("Received PING message from", conn.RemoteAddr())
-	// Extract sender ID
-	senderIDStr := strings.TrimSpace(strings.TrimPrefix(message, "PING"))
+func (kademlia *Kademlia) handlePingMessage(message string, senderAddr string) string {
+	fmt.Println("Received PING message from", senderAddr)
+	// Extract sender's ID from the message
+	parts := strings.Split(message, " ")
+	if len(parts) < 2 {
+		fmt.Println("Invalid PING message format")
+		return ""
+	}
+	senderIDStr := parts[1]
 	senderID := NewKademliaID(senderIDStr)
-	senderAddr := conn.RemoteAddr().String()
 	senderContact := NewContact(senderID, senderAddr)
 	kademlia.RoutingTable.AddContact(senderContact)
 
-	// Send PONG response
+	// Prepare PONG response including our own ID
 	response := fmt.Sprintf("PONG %s", kademlia.Network.LocalID.String())
-	conn.Write([]byte(response))
+	return response
 }
 
-func (kademlia *Kademlia) handleFindNodeMessage(conn net.Conn, message string) {
-	fmt.Println("Received FIND_NODE message from", conn.RemoteAddr())
+func (kademlia *Kademlia) handlePongMessage(message string, senderAddr string) {
+	fmt.Println("Received PONG message from", senderAddr)
+	// Extract sender's ID from the message
+	parts := strings.Split(message, " ")
+	if len(parts) < 2 {
+		fmt.Println("Invalid PONG message format")
+		return
+	}
+	senderIDStr := parts[1]
+	senderID := NewKademliaID(senderIDStr)
+	senderContact := NewContact(senderID, senderAddr)
+	kademlia.RoutingTable.AddContact(senderContact)
+}
+
+func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr string) string {
+	fmt.Println("Received FIND_NODE message from", senderAddr)
 	parts := strings.Split(message, " ")
 	if len(parts) < 2 {
 		fmt.Println("Invalid FIND_NODE message format")
-		return
+		return ""
 	}
 	targetIDStr := parts[1]
 	targetID := NewKademliaID(targetIDStr)
@@ -91,81 +110,68 @@ func (kademlia *Kademlia) handleFindNodeMessage(conn net.Conn, message string) {
 		contactsStrList = append(contactsStrList, contactStr)
 	}
 	responseMessage := "FIND_NODE_RESPONSE " + strings.Join(contactsStrList, ";")
-
-	// Send response
-	conn.Write([]byte(responseMessage))
+	return responseMessage
 }
 
-func (kademlia *Kademlia) handleStoreMessage(conn net.Conn, message string) {
-	fmt.Println("Received STORE message from", conn.RemoteAddr())
+func (kademlia *Kademlia) handleStoreMessage(message string, senderAddr string) string {
+	fmt.Println("Received STORE message from", senderAddr)
 
 	parts := strings.SplitN(message, " ", 3)
 	if len(parts) < 3 {
 		fmt.Println("Invalid STORE message format")
-		return
+		return "STORE_ERROR Invalid format"
 	}
 	hash := parts[1]
 	dataBase64 := parts[2]
 	data, err := base64.StdEncoding.DecodeString(dataBase64)
 	if err != nil {
 		fmt.Println("Error decoding data:", err)
-		return
+		return "STORE_ERROR Decoding error"
 	}
 
 	kademlia.DataStore[hash] = data
 	fmt.Println("Stored data with hash:", hash)
+
+	// Return acknowledgment
+	return "STORE_OK"
 }
 
-func (kademlia *Kademlia) handleFindValueMessage(conn net.Conn, message string) {
-	fmt.Println("Received FIND_VALUE message from", conn.RemoteAddr())
+func (kademlia *Kademlia) handleFindValueMessage(message string, senderAddr string) string {
+	fmt.Println("Received FIND_VALUE message from", senderAddr)
 
 	parts := strings.Split(message, " ")
 	if len(parts) < 2 {
 		fmt.Println("Invalid FIND_VALUE message format")
-		return
+		return ""
 	}
 	hash := parts[1]
 
 	if data, found := kademlia.DataStore[hash]; found {
 		responseMessage := fmt.Sprintf("VALUE %s", base64.StdEncoding.EncodeToString(data))
-		conn.Write([]byte(responseMessage))
-		fmt.Println("Sent VALUE response to", conn.RemoteAddr())
+		return responseMessage
 	} else {
 		// Optionally, send a response indicating data not found
 		responseMessage := "VALUE_NOT_FOUND"
-		conn.Write([]byte(responseMessage))
+		return responseMessage
+	}
+}
+
+// Ping a contact
+func (kademlia *Kademlia) Ping(contact *Contact) {
+	err := kademlia.Network.SendPing(contact)
+	if err != nil {
+		fmt.Println("Error pinging contact:", err)
 	}
 }
 
 // SendFindNode sends a FIND_NODE message to a contact
 func (kademlia *Kademlia) SendFindNode(targetID *KademliaID, contact *Contact) []Contact {
-	message := fmt.Sprintf("FIND_NODE %s", targetID.String())
-	response, err := kademlia.Network.SendMessage(contact.Address, message)
+	contacts, err := kademlia.Network.SendFindNode(contact, targetID)
 	if err != nil {
-		fmt.Println("Error sending FIND_NODE:", err)
+		fmt.Println("Error during SendFindNode:", err)
 		return nil
 	}
-
-	if strings.HasPrefix(response, "FIND_NODE_RESPONSE") {
-		contactsStr := strings.TrimPrefix(response, "FIND_NODE_RESPONSE ")
-		contactsList := strings.Split(contactsStr, ";")
-		var contacts []Contact
-		for _, contactStr := range contactsList {
-			parts := strings.Split(contactStr, "|")
-			if len(parts) != 2 {
-				continue
-			}
-			idStr := parts[0]
-			address := parts[1]
-			id := NewKademliaID(idStr)
-			contact := NewContact(id, address)
-			contacts = append(contacts, contact)
-		}
-		return contacts
-	} else {
-		fmt.Println("Invalid FIND_NODE response:", response)
-		return nil
-	}
+	return contacts
 }
 
 // LookupContact performs an iterative node lookup
@@ -262,10 +268,11 @@ func (kademlia *Kademlia) Store(data []byte) string {
 	// Find the k closest nodes to the hash
 	targetID := NewKademliaID(hashString)
 	closestContacts := kademlia.LookupContact(targetID)
+	fmt.Println("Closest contacts to hash:", closestContacts)
 
 	// Send STORE messages to each contact
 	for _, contact := range closestContacts {
-		kademlia.SendStore(&contact, hashString, data)
+		kademlia.Network.SendStore(&contact, hashString, data)
 	}
 
 	// Optionally store the data locally if this node is among the closest
@@ -279,16 +286,6 @@ func (kademlia *Kademlia) Store(data []byte) string {
 	return hashString
 }
 
-// SendStore sends a STORE message to a contact
-func (kademlia *Kademlia) SendStore(contact *Contact, hash string, data []byte) {
-	dataBase64 := base64.StdEncoding.EncodeToString(data)
-	message := fmt.Sprintf("STORE %s %s", hash, dataBase64)
-	_, err := kademlia.Network.SendMessage(contact.Address, message)
-	if err != nil {
-		fmt.Println("Error sending STORE message:", err)
-	}
-}
-
 // LookupData retrieves data from the network
 func (kademlia *Kademlia) LookupData(hash string) ([]byte, error) {
 	// Check local datastore
@@ -298,15 +295,11 @@ func (kademlia *Kademlia) LookupData(hash string) ([]byte, error) {
 
 	// Perform iterative lookup
 	targetID := NewKademliaID(hash)
-	// alpha := 3
-	// k := bucketSize
-
-	// Initialize shortlist
 	closestContacts := kademlia.LookupContact(targetID)
 
 	for _, contact := range closestContacts {
-		data := kademlia.SendFindData(&contact, hash)
-		if data != nil {
+		data, err := kademlia.Network.SendFindValue(&contact, hash)
+		if err == nil && data != nil {
 			// Store data locally
 			kademlia.DataStore[hash] = data
 			return data, nil
@@ -314,36 +307,4 @@ func (kademlia *Kademlia) LookupData(hash string) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("Data not found for hash: %s", hash)
-}
-
-// SendFindData sends a FIND_VALUE message to a contact
-func (kademlia *Kademlia) SendFindData(contact *Contact, hash string) []byte {
-	message := fmt.Sprintf("FIND_VALUE %s", hash)
-	response, err := kademlia.Network.SendMessage(contact.Address, message)
-	if err != nil {
-		fmt.Println("Error sending FIND_VALUE:", err)
-		return nil
-	}
-
-	if strings.HasPrefix(response, "VALUE") {
-		dataBase64 := strings.TrimPrefix(response, "VALUE ")
-		data, err := base64.StdEncoding.DecodeString(dataBase64)
-		if err != nil {
-			fmt.Println("Error decoding data:", err)
-			return nil
-		}
-		return data
-	}
-	return nil
-}
-
-// SendPing sends a PING message to a contact
-func (kademlia *Kademlia) SendPing(contact *Contact) {
-	message := fmt.Sprintf("PING %s", kademlia.Network.LocalID.String())
-	response, err := kademlia.Network.SendMessage(contact.Address, message)
-	if err != nil {
-		fmt.Println("Error sending PING message:", err)
-		return
-	}
-	fmt.Println("Received response:", response)
 }

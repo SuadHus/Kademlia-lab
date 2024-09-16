@@ -26,8 +26,9 @@ func main() {
 
 	// Create a contact for the peer node
 	if contactAddr != "" {
-		contact := kademlia.NewContact(kademlia.NewRandomKademliaID(), contactAddr)
-		myKademlia.SendPing(&contact)
+		contact := kademlia.NewContact(nil, contactAddr)
+		myKademlia.Network.SendPing(&contact)
+		myKademlia.LookupContact(myKademlia.Network.LocalID)
 	} else {
 		fmt.Println("CONTACT_ADDRESS not set in environment")
 	}

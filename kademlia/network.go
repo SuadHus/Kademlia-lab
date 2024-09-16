@@ -1,6 +1,7 @@
 package kademlia
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net"
 	"strings"
@@ -8,14 +9,14 @@ import (
 
 // Network struct definition
 type Network struct {
-	LocalID   *KademliaID // Exported by making the first letter uppercase
-	LocalAddr string      // Exported by making the first letter uppercase
+	LocalID   *KademliaID // The local node's Kademlia ID
+	LocalAddr string      // The local node's address
 	handler   MessageHandler
 }
 
 // MessageHandler interface for handling messages
 type MessageHandler interface {
-	HandleMessage(message string, conn net.Conn)
+	HandleMessage(message string, senderAddr string) string
 }
 
 // Listen starts a listener on the specified IP and port
@@ -27,6 +28,8 @@ func (network *Network) Listen(ip string, port int) {
 		return
 	}
 	defer listener.Close()
+
+	fmt.Println("Listening on", addr)
 
 	for {
 		conn, err := listener.Accept()
@@ -42,7 +45,7 @@ func (network *Network) Listen(ip string, port int) {
 func (network *Network) parseConnection(conn net.Conn) {
 	defer conn.Close()
 
-	// Create a buffer to store the incoming data
+	// Read message from connection
 	buffer := make([]byte, 4096)
 	n, err := conn.Read(buffer)
 	if err != nil {
@@ -50,13 +53,21 @@ func (network *Network) parseConnection(conn net.Conn) {
 		return
 	}
 
-	// Convert the buffer to a string and trim any trailing whitespace
 	message := string(buffer[:n])
 	message = strings.TrimSpace(message)
 
-	// Pass the message to the handler
+	remoteAddr := conn.RemoteAddr().String()
+
+	// Pass the message and remote address to the handler and get a response
 	if network.handler != nil {
-		network.handler.HandleMessage(message, conn)
+		response := network.handler.HandleMessage(message, remoteAddr)
+		if response != "" {
+			// Send response back
+			_, err := conn.Write([]byte(response))
+			if err != nil {
+				fmt.Println("Error sending response:", err)
+			}
+		}
 	} else {
 		fmt.Println("No message handler set")
 	}
@@ -84,13 +95,87 @@ func (network *Network) SendMessage(address string, message string) (string, err
 	return response, nil
 }
 
-// SendPingMessage sends a PING message to a given contact
-func (network *Network) SendPingMessage(contact *Contact) {
+// SendPing sends a PING message to a given contact
+func (network *Network) SendPing(contact *Contact) error {
 	message := fmt.Sprintf("PING %s", network.LocalID.String())
 	response, err := network.SendMessage(contact.Address, message)
 	if err != nil {
 		fmt.Println("Error sending PING message:", err)
-		return
+		return err
 	}
-	fmt.Println("Received response:", response)
+	// Handle the response
+	if network.handler != nil {
+		network.handler.HandleMessage(response, contact.Address)
+	}
+	return nil
+}
+
+// SendFindNode sends a FIND_NODE message to a given contact
+func (network *Network) SendFindNode(contact *Contact, targetID *KademliaID) ([]Contact, error) {
+	message := fmt.Sprintf("FIND_NODE %s", targetID.String())
+	response, err := network.SendMessage(contact.Address, message)
+	if err != nil {
+		fmt.Println("Error sending FIND_NODE message:", err)
+		return nil, err
+	}
+
+	// Handle the response
+	if strings.HasPrefix(response, "FIND_NODE_RESPONSE") {
+		contactsStr := strings.TrimPrefix(response, "FIND_NODE_RESPONSE ")
+		contactsList := strings.Split(contactsStr, ";")
+		var contacts []Contact
+		for _, contactStr := range contactsList {
+			parts := strings.Split(contactStr, "|")
+			if len(parts) != 2 {
+				continue
+			}
+			idStr := parts[0]
+			address := parts[1]
+			id := NewKademliaID(idStr)
+			contact := NewContact(id, address)
+			contacts = append(contacts, contact)
+		}
+		return contacts, nil
+	} else {
+		fmt.Println("Invalid FIND_NODE response:", response)
+		return nil, fmt.Errorf("Invalid FIND_NODE response")
+	}
+}
+
+func (network *Network) SendStore(contact *Contact, hash string, data []byte) error {
+	dataBase64 := base64.StdEncoding.EncodeToString(data)
+	message := fmt.Sprintf("STORE %s %s", hash, dataBase64)
+	response, err := network.SendMessage(contact.Address, message)
+	if err != nil {
+		fmt.Println("Error sending STORE message:", err)
+		return err
+	}
+	if response != "STORE_OK" {
+		fmt.Println("Error response from STORE:", response)
+		return fmt.Errorf("Store failed: %s", response)
+	}
+	return nil
+}
+
+// SendFindValue sends a FIND_VALUE message to a contact
+func (network *Network) SendFindValue(contact *Contact, hash string) ([]byte, error) {
+	message := fmt.Sprintf("FIND_VALUE %s", hash)
+	response, err := network.SendMessage(contact.Address, message)
+	if err != nil {
+		fmt.Println("Error sending FIND_VALUE message:", err)
+		return nil, err
+	}
+
+	if strings.HasPrefix(response, "VALUE") {
+		dataBase64 := strings.TrimPrefix(response, "VALUE ")
+		data, err := base64.StdEncoding.DecodeString(dataBase64)
+		if err != nil {
+			fmt.Println("Error decoding data:", err)
+			return nil, err
+		}
+		return data, nil
+	} else {
+		// Handle other responses
+		return nil, fmt.Errorf("Invalid FIND_VALUE response")
+	}
 }
