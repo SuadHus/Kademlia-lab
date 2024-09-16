@@ -8,8 +8,9 @@ import (
 
 // Network struct definition
 type Network struct {
-	LocalID   *KademliaID // Exported by making the first letter uppercase
-	LocalAddr string      // Exported by making the first letter uppercase
+	LocalID    *KademliaID
+	LocalAddr  string
+	pingPongCh chan Msgs
 }
 
 func Listen(ip string, port int) {
@@ -96,7 +97,8 @@ func handlePingMsgs(pingOriginAddr string) {
 }
 
 func handlePongMsgs(pongOriginIP string) {
-	fmt.Println("inside handlePongMsgs with pongOriginIP: ", pongOriginIP)
+	fmt.Println("inside handlePongMsgs, sending contact to ch: ", pongOriginIP)
+
 }
 
 // handleConnection handles incoming messages
