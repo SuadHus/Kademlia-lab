@@ -27,7 +27,6 @@ func InitKademlia(localAddr string) *Kademlia {
 
 	me := NewContact(NewRandomKademliaID(), localAddr)
 	myRoutingTable := NewRoutingTable(me)
-
 	// Initi kademlia and set its network
 	return &Kademlia{
 		Network:      myNetwork,
@@ -35,6 +34,7 @@ func InitKademlia(localAddr string) *Kademlia {
 		Me:           &me,
 		pingPongCh:   pingPongCh,
 	}
+
 }
 
 func (k *Kademlia) ListenForMsgs() {
@@ -42,7 +42,7 @@ func (k *Kademlia) ListenForMsgs() {
 		for msgs := range k.pingPongCh {
 			switch msgs.MsgsType {
 			case "PING":
-				fmt.Println("Received PING from contact:", msgs.Contact)
+				fmt.Println("Received PING from contact:", msgs.Contact, "sending Pong to kadem channel")
 				pongMsg := Msgs{
 					MsgsType: "PONG",
 					Contact:  *k.Me, // send me back in the PONG
