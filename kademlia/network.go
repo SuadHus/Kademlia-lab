@@ -6,14 +6,14 @@ import (
 	"strings"
 )
 
-// Network struct definition
 type Network struct {
-	LocalID   *KademliaID // Exported by making the first letter uppercase
-	LocalAddr string      // Exported by making the first letter uppercase
+	LocalID   *KademliaID
+	LocalAddr string
+	msgChan   chan string
 }
 
 // Listen starts a listener on the specified IP and port
-func Listen(ip string, port int) {
+func (network *Network) Listen(ip string, port int) {
 	addr := fmt.Sprintf("%s:%d", ip, port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -29,11 +29,11 @@ func Listen(ip string, port int) {
 			continue
 		}
 		// Parse and handle the connection asynchronously
-		go parseConnection(conn)
+		go network.parseConnection(conn)
 	}
 }
 
-func parseConnection(conn net.Conn) {
+func (network *Network) parseConnection(conn net.Conn) {
 	defer conn.Close()
 
 	// Create a buffer to store the incoming data
@@ -51,28 +51,23 @@ func parseConnection(conn net.Conn) {
 	// Use a switch case to handle different message types
 	switch {
 	case strings.HasPrefix(message, "PING"):
-		fmt.Print()
-		go handlePingMessage(conn, message)
+		go network.handlePingMessage(conn, message)
 
 	case strings.HasPrefix(message, "PONG"):
 		fmt.Println("Received PONG message:", message)
-		// Optionally handle the PONG message further
 
 	case strings.HasPrefix(message, "BYE"):
 		fmt.Println("Received BYE message:", message)
-		// Add logic for handling BYE messages here
 
 	default:
 		fmt.Println("Received unknown message:", message)
-		// Handle unknown message types here
 	}
 }
 
-// handlePingMessage will process the PING message and respond with a PONG on a new connection
-func handlePingMessage(conn net.Conn, message string) {
-	fmt.Println("Received PING message from", conn.RemoteAddr())
+// handlePingMessage processes the PING message and responds with a PONG
+func (network *Network) handlePingMessage(conn net.Conn, message string) {
+	fmt.Println("Received PING message from", message)
 
-	// Extract the IP and port from the remote connection
 	remoteAddr := conn.RemoteAddr().String()
 	ip, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
@@ -80,15 +75,14 @@ func handlePingMessage(conn net.Conn, message string) {
 		return
 	}
 
-	// Create a new connection to the sender to send a PONG message
-	newConn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", ip, 8080)) // Assume PONG goes to port 9999 or similar
+	// Create a new connection to send a PONG message
+	newConn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", ip, 8080))
 	if err != nil {
 		fmt.Println("Error connecting back to sender:", err)
 		return
 	}
 	defer newConn.Close()
 
-	// Prepare and send the PONG message
 	pongMessage := fmt.Sprintf("PONG from %s", newConn.LocalAddr().String())
 	_, err = newConn.Write([]byte(pongMessage))
 	if err != nil {
@@ -101,32 +95,18 @@ func handlePingMessage(conn net.Conn, message string) {
 
 // SendPingMessage sends a PING message to a given contact
 func (network *Network) SendPingMessage(contact *Contact) {
-	// Establish a connection to the contact
+	network.msgChan <- "Sending PING message to " + contact.Address
 	conn, err := net.Dial("tcp", contact.Address)
 	if err != nil {
 		fmt.Println("Error connecting to contact:", err)
 		return
 	}
-	defer conn.Close() // Keep connection open until after response is handled
+	defer conn.Close()
 
-	// Send the PING message
-	message := fmt.Sprintf("PING from %s", network.LocalID.String())
+	message := fmt.Sprintf("PING from %s %s", network.LocalID.String(), network.LocalAddr)
 	_, err = conn.Write([]byte(message))
 	if err != nil {
 		fmt.Println("Error sending ping message:", err)
 		return
 	}
-
-}
-
-func (network *Network) SendFindContactMessage(contact *Contact) {
-	// TODO
-}
-
-func (network *Network) SendFindDataMessage(hash string) {
-	// TODO
-}
-
-func (network *Network) SendStoreMessage(data []byte) {
-	// TODO
 }
