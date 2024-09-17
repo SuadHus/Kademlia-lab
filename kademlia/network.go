@@ -67,6 +67,7 @@ func (network *Network) parseConnection(conn net.Conn) {
 // handlePingMessage processes the PING message and responds with a PONG
 func (network *Network) handlePingMessage(conn net.Conn, message string) {
 	fmt.Println("Received PING message from", message)
+	network.msgChan <- message
 
 	remoteAddr := conn.RemoteAddr().String()
 	ip, _, err := net.SplitHostPort(remoteAddr)
@@ -95,7 +96,6 @@ func (network *Network) handlePingMessage(conn net.Conn, message string) {
 
 // SendPingMessage sends a PING message to a given contact
 func (network *Network) SendPingMessage(contact *Contact) {
-	network.msgChan <- "Sending PING message to " + contact.Address
 	conn, err := net.Dial("tcp", contact.Address)
 	if err != nil {
 		fmt.Println("Error connecting to contact:", err)

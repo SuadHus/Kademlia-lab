@@ -2,6 +2,7 @@ package kademlia
 
 import (
 	"fmt"
+	"strings"
 )
 
 // Kademlia represents the Kademlia distributed hash table.
@@ -55,9 +56,23 @@ func (kademlia *Kademlia) listenForMessages() {
 	for {
 		select {
 		case msg := <-kademlia.Network.msgChan:
-			// Process the received message from the channel
+			// Split the message by spaces to parse it
+			parts := strings.Split(msg, " ")
+			if len(parts) == 4 && parts[0] == "PING" && parts[1] == "from" {
+				// Extract the Kademlia ID and address from the message
+				contactID := NewKademliaID(parts[2]) // The 3rd part is the ID
+				contactAddr := parts[3]              // The 4th part is the Address
 
-			fmt.Println("Received message on Kademlia channel:", msg)
+				// Create a new contact and add it to the routing table
+				newContact := NewContact(contactID, contactAddr)
+				kademlia.RoutingTable.AddContact(newContact)
+
+				fmt.Println("Received message on Kademlia channel:", msg)
+				go PrintAllContacts(kademlia.RoutingTable)
+
+			} else {
+				fmt.Println("Invalid message format:", msg)
+			}
 		}
 	}
 }
@@ -72,4 +87,18 @@ func (kademlia *Kademlia) LookupData(hash string) {
 
 func (kademlia *Kademlia) Store(data []byte) {
 	// TODO: Implement data storage
+}
+
+func PrintAllContacts(rt *RoutingTable) {
+	fmt.Println("Contacts in the Routing Table:")
+	for i, bucket := range rt.buckets {
+		if bucket == nil || bucket.Len() == 0 {
+			continue
+		}
+		fmt.Printf("Bucket %d:\n", i)
+		for e := bucket.list.Front(); e != nil; e = e.Next() {
+			contact := e.Value.(Contact)
+			fmt.Printf("Contact ID: %s, Address: %s\n", contact.ID.String(), contact.Address)
+		}
+	}
 }
