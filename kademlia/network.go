@@ -50,14 +50,13 @@ func (network *Network) parseConnection(conn net.Conn) {
 
 	switch {
 	case strings.HasPrefix(message, "PING"):
-		fmt.Println("Received PING message:", message, "FROM: ", remoteIP)
+		fmt.Println("Received PING message:", message)
 		network.pingPongCh <- Msgs{
 			MsgsType: "PING",
 			Contact: Contact{
 				Address: remoteIP,
 			},
 		}
-		fmt.Println("before SendPongResponse Call")
 		network.sendPongResponse(remoteIP)
 
 	case strings.HasPrefix(message, "PONG"):
@@ -114,6 +113,21 @@ func (network *Network) SendPingMessage(contact *Contact) {
 	defer conn.Close()
 
 	message := fmt.Sprintf("PING from %s", network.LocalID.String())
+	_, err = conn.Write([]byte(message))
+	if err != nil {
+		fmt.Println("Error sending ping message:", err)
+	}
+}
+
+func (network *Network) SendPingMessage2(me *Contact, remoteContact *Contact) {
+	conn, err := net.Dial("tcp", remoteContact.Address)
+	if err != nil {
+		fmt.Println("Error connecting to contact:", err)
+		return
+	}
+	defer conn.Close()
+
+	message := fmt.Sprintf("PING from %s", me)
 	_, err = conn.Write([]byte(message))
 	if err != nil {
 		fmt.Println("Error sending ping message:", err)

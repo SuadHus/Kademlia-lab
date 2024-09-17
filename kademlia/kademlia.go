@@ -16,11 +16,11 @@ type Msgs struct {
 	Contact  Contact
 }
 
-func InitKademlia(localAddr string) *Kademlia {
+func InitKademlia(localAddr string, id KademliaID) *Kademlia {
 	pingPongCh := make(chan Msgs)
 
 	myNetwork := &Network{
-		LocalID:    NewRandomKademliaID(),
+		LocalID:    &id,
 		LocalAddr:  localAddr,
 		pingPongCh: pingPongCh,
 	}
@@ -51,6 +51,7 @@ func (k *Kademlia) ListenForMsgs() {
 			case "PONG":
 				fmt.Println("Received PONG from contact:", msgs.Contact)
 				k.RoutingTable.AddContact(msgs.Contact)
+				fmt.Println("added contact: ", msgs.Contact, "too routing table")
 			default:
 				fmt.Println("Received unknown message type:", msgs.MsgsType)
 			}

@@ -15,17 +15,26 @@ func main() {
 		localAddr = "127.0.0.1" // Use a default value if environment variable is not set
 	}
 
-	myKademlia := kademlia.InitKademlia(localAddr) // init kademlia
-	myKademlia.ListenForMsgs()                     // set kademlia to listen for msgs on channel
-	go myKademlia.Network.Listen("0.0.0.0", 8080)  // every node listens on incomeing net traffic on 8080
+	var id *kademlia.KademliaID
+	if localAddr == rootAddr {
+		id = kademlia.NewKademliaID("FFFFFFFF00000000000000000000000000000000")
+	} else {
+		id = kademlia.NewRandomKademliaID()
+	}
+
+	myKademlia := kademlia.InitKademlia(localAddr, *id) // init kademlia
+	myKademlia.ListenForMsgs()                          // set kademlia to listen for msgs on channel
+	go myKademlia.Network.Listen("0.0.0.0", 8080)       // every node listens on incomeing net traffic on 8080
 
 	// Create a contact for the peer node
 	if rootAddr != "" {
-		rootContact := kademlia.NewContact(kademlia.NewRandomKademliaID(), rootAddr)
-		myKademlia.Network.SendPingMessage(&rootContact)
+		rootContact := kademlia.NewContact(id, rootAddr)
+		myKademlia.Network.SendPingMessage2(myKademlia.Me, &rootContact)
 	} else {
 		fmt.Println("Root node does not init ping")
 	}
+
+	fmt.Println(myKademlia.Me)
 
 	// Keep the application running
 	select {}
