@@ -34,10 +34,9 @@ func (network *Network) Listen(ip string, port int) {
 
 func (network *Network) parseConnection(conn net.Conn) {
 	defer conn.Close()
-	remoteIP := conn.RemoteAddr().String()
 
 	// Create a buffer to store the incoming data
-	buffer := make([]byte, 1024)
+	buffer := make([]byte, 4096)
 	n, err := conn.Read(buffer)
 	if err != nil {
 		fmt.Println("Error reading from connection:", err)
@@ -50,21 +49,42 @@ func (network *Network) parseConnection(conn net.Conn) {
 
 	switch {
 	case strings.HasPrefix(message, "PING"):
-		fmt.Println("Received PING message:", message)
+		fmt.Println("Received message:", message)
+
+		// Parse the message to extract localAddress and
+		var pingOriginAddr, pingOriginID string
+		_, err := fmt.Sscanf(message, "PING from %s (%s)", &pingOriginAddr, &pingOriginID)
+		if err != nil {
+			fmt.Println("Error parsing PING message:", err)
+			return
+		}
+
+		// Update the routing table or send PONG response
 		network.pingPongCh <- Msgs{
 			MsgsType: "PING",
 			Contact: Contact{
-				Address: remoteIP,
+				Address: pingOriginAddr,
+				ID:      NewKademliaID(pingOriginID),
 			},
 		}
-		network.sendPongResponse(remoteIP)
+		network.sendPongResponse(pingOriginAddr)
 
 	case strings.HasPrefix(message, "PONG"):
-		fmt.Println("Received PONG message:", message)
+		fmt.Println("Received message:", message)
+
+		// Parse the PONG message similarly (if necessary)
+		var localAddr, localID string
+		_, err := fmt.Sscanf(message, "PONG from %s (%s)", localAddr, localID)
+		if err != nil {
+			fmt.Println("Error parsing PONG message:", err)
+			return
+		}
+
 		network.pingPongCh <- Msgs{
 			MsgsType: "PONG",
 			Contact: Contact{
-				Address: remoteIP,
+				Address: localAddr,
+				ID:      NewKademliaID(localID),
 			},
 		}
 
@@ -93,7 +113,7 @@ func (network *Network) sendPongResponse(pingOriginAddr string) {
 	defer conn.Close()
 
 	// Send a PONG message back to the origin
-	pongMessage := "PONG from: " + network.LocalAddr
+	pongMessage := "PONG from: " + network.LocalAddr + network.LocalID.String()
 	_, err = conn.Write([]byte(pongMessage))
 	if err != nil {
 		fmt.Println("Error sending PONG message:", err)
@@ -112,14 +132,15 @@ func (network *Network) SendPingMessage(contact *Contact) {
 	}
 	defer conn.Close()
 
-	message := fmt.Sprintf("PING from %s", network.LocalID.String())
+	message := fmt.Sprintf("PING from %s (%s)", network.LocalAddr, network.LocalID.String())
 	_, err = conn.Write([]byte(message))
 	if err != nil {
 		fmt.Println("Error sending ping message:", err)
 	}
 }
 
-func (network *Network) SendPingMessage2(me *Contact, remoteContact *Contact) {
+func (network *Network) SendPingMessage2(remoteContact *Contact) {
+	fmt.Println("Sending ping to remoteContact: ", remoteContact)
 	conn, err := net.Dial("tcp", remoteContact.Address)
 	if err != nil {
 		fmt.Println("Error connecting to contact:", err)
@@ -127,7 +148,7 @@ func (network *Network) SendPingMessage2(me *Contact, remoteContact *Contact) {
 	}
 	defer conn.Close()
 
-	message := fmt.Sprintf("PING from %s", me)
+	message := fmt.Sprintf("PING from %s (%s)", network.LocalAddr, network.LocalID.String())
 	_, err = conn.Write([]byte(message))
 	if err != nil {
 		fmt.Println("Error sending ping message:", err)

@@ -29,12 +29,12 @@ func main() {
 	// Create a contact for the peer node
 	if rootAddr != "" {
 		rootContact := kademlia.NewContact(id, rootAddr)
-		myKademlia.Network.SendPingMessage2(myKademlia.Me, &rootContact)
+		myKademlia.Network.SendPingMessage2(&rootContact)
 	} else {
 		fmt.Println("Root node does not init ping")
 	}
 
-	fmt.Println(myKademlia.Me)
+	fmt.Println(myKademlia.RoutingTable)
 
 	// Keep the application running
 	select {}

@@ -7,7 +7,6 @@ import (
 type Kademlia struct {
 	Network      *Network
 	RoutingTable *RoutingTable
-	Me           *Contact
 	pingPongCh   chan Msgs
 }
 
@@ -25,13 +24,13 @@ func InitKademlia(localAddr string, id KademliaID) *Kademlia {
 		pingPongCh: pingPongCh,
 	}
 
-	me := NewContact(NewRandomKademliaID(), localAddr)
+	me := NewContact(&id, localAddr)
 	myRoutingTable := NewRoutingTable(me)
+
 	// Initi kademlia and set its network
 	return &Kademlia{
 		Network:      myNetwork,
 		RoutingTable: myRoutingTable,
-		Me:           &me,
 		pingPongCh:   pingPongCh,
 	}
 
@@ -45,7 +44,7 @@ func (k *Kademlia) ListenForMsgs() {
 				fmt.Println("Received PING from contact:", msgs.Contact, "sending Pong to kadem channel")
 				pongMsg := Msgs{
 					MsgsType: "PONG",
-					Contact:  *k.Me, // send me back in the PONG
+					Contact:  k.RoutingTable.me, // send me back in the PONG
 				}
 				k.pingPongCh <- pongMsg
 			case "PONG":
