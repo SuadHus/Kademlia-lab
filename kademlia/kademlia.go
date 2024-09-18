@@ -55,7 +55,7 @@ func (k *Kademlia) ListenForMsgs() {
 			case "PING":
 				fmt.Println("Network module sent CH msgs about PING from contact:", msgs.Contact)
 				k.RoutingTable.AddContact(msgs.Contact) // add contact of incoming ping to rt
-				PrintAllContacts(k.RoutingTable)
+				go PrintAllContacts(k.RoutingTable)
 				pongMsg := Msgs{
 					MsgsType: "PONG",
 					Contact:  k.RoutingTable.me, // send me back in the PONG
@@ -66,7 +66,7 @@ func (k *Kademlia) ListenForMsgs() {
 			case "PONG":
 				fmt.Println("Network module sent CH msgs about PONG from contact:", msgs.Contact)
 				k.RoutingTable.AddContact(msgs.Contact)
-				PrintAllContacts(k.RoutingTable)
+				go PrintAllContacts(k.RoutingTable)
 
 			default:
 				fmt.Println("Received unknown message type:", msgs.MsgsType)
