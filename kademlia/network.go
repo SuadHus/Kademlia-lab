@@ -36,7 +36,7 @@ func (network *Network) parseConnection(conn net.Conn) {
 	defer conn.Close()
 
 	// Create a buffer to store the incoming data
-	buffer := make([]byte, 4096)
+	buffer := make([]byte, 1024) // could be 4096
 	n, err := conn.Read(buffer)
 	if err != nil {
 		fmt.Println("Error reading from connection:", err)
@@ -49,17 +49,14 @@ func (network *Network) parseConnection(conn net.Conn) {
 
 	switch {
 	case strings.HasPrefix(message, "PING"):
-		fmt.Println("Received message:", message)
 
-		// Parse the message to extract localAddress and
+		fmt.Println("Received NET message:", message)
 		var pingOriginAddr, pingOriginID string
-		_, err := fmt.Sscanf(message, "PING from %s (%s)", &pingOriginAddr, &pingOriginID)
+		_, err := fmt.Sscanf(message, "PING from %s %s", &pingOriginAddr, &pingOriginID)
 		if err != nil {
 			fmt.Println("Error parsing PING message:", err)
 			return
 		}
-
-		// Update the routing table or send PONG response
 		network.pingPongCh <- Msgs{
 			MsgsType: "PING",
 			Contact: Contact{
@@ -67,24 +64,29 @@ func (network *Network) parseConnection(conn net.Conn) {
 				ID:      NewKademliaID(pingOriginID),
 			},
 		}
-		network.sendPongResponse(pingOriginAddr)
+		// read from the channel
+		pongMsgs := <-network.pingPongCh
+		if pongMsgs.MsgsType == "PONG" {
+			// Send the PONG response back to the original address
+			network.sendPongResponse(pingOriginAddr)
+		} else {
+			fmt.Println("Unexpected message received:", pongMsgs)
+		}
 
 	case strings.HasPrefix(message, "PONG"):
-		fmt.Println("Received message:", message)
 
-		// Parse the PONG message similarly (if necessary)
-		var localAddr, localID string
-		_, err := fmt.Sscanf(message, "PONG from %s (%s)", localAddr, localID)
+		fmt.Println("Received NET message:", message)
+		var pongOriginIP, pongOriginID string
+		_, err := fmt.Sscanf(message, "PONG from %s %s", &pongOriginIP, &pongOriginID)
 		if err != nil {
 			fmt.Println("Error parsing PONG message:", err)
 			return
 		}
-
 		network.pingPongCh <- Msgs{
 			MsgsType: "PONG",
 			Contact: Contact{
-				Address: localAddr,
-				ID:      NewKademliaID(localID),
+				Address: pongOriginIP,
+				ID:      NewKademliaID(pongOriginID),
 			},
 		}
 
@@ -93,17 +95,28 @@ func (network *Network) parseConnection(conn net.Conn) {
 	}
 }
 
-// sendPongResponse sends a PONG message back to the node that sent the PING
-func (network *Network) sendPongResponse(pingOriginAddr string) {
-
-	pongIP, _, err := net.SplitHostPort(pingOriginAddr)
+func (network *Network) SendPingMessage(remoteContact *Contact) {
+	fmt.Println("Sending NET PING to remoteContact: ", remoteContact)
+	conn, err := net.Dial("tcp", remoteContact.Address)
 	if err != nil {
-		fmt.Println("Error extracting IP from origin address:", err)
+		fmt.Println("Error connecting to contact:", err)
 		return
 	}
+	defer conn.Close()
 
+	message := fmt.Sprintf("PING from %s %s", network.LocalAddr, network.LocalID.String())
+
+	_, err = conn.Write([]byte(message))
+	if err != nil {
+		fmt.Println("Error sending ping message:", err)
+	}
+}
+
+// sendPongResponse sends a PONG message back to the node that sent the PING
+func (network *Network) sendPongResponse(pingOriginAddr string) {
+	fmt.Println("Sending NET PONG to remoteContact: ", pingOriginAddr)
 	// all nodes listen on port 8080, see main
-	pongIP = net.JoinHostPort(pongIP, "8080")
+	pongIP := net.JoinHostPort(pingOriginAddr, "8080")
 
 	conn, err := net.Dial("tcp", pongIP)
 	if err != nil {
@@ -113,7 +126,7 @@ func (network *Network) sendPongResponse(pingOriginAddr string) {
 	defer conn.Close()
 
 	// Send a PONG message back to the origin
-	pongMessage := "PONG from: " + network.LocalAddr + network.LocalID.String()
+	pongMessage := fmt.Sprintf("PONG from %s %s", network.LocalAddr, network.LocalID.String())
 	_, err = conn.Write([]byte(pongMessage))
 	if err != nil {
 		fmt.Println("Error sending PONG message:", err)
@@ -122,74 +135,6 @@ func (network *Network) sendPongResponse(pingOriginAddr string) {
 
 	fmt.Println("Sent PONG message with server IP:", network.LocalAddr, "to", pongIP)
 }
-
-// SendPingMessage sends a ping message to the given contact
-func (network *Network) SendPingMessage(contact *Contact) {
-	conn, err := net.Dial("tcp", contact.Address)
-	if err != nil {
-		fmt.Println("Error connecting to contact:", err)
-		return
-	}
-	defer conn.Close()
-
-	message := fmt.Sprintf("PING from %s (%s)", network.LocalAddr, network.LocalID.String())
-	_, err = conn.Write([]byte(message))
-	if err != nil {
-		fmt.Println("Error sending ping message:", err)
-	}
-}
-
-func (network *Network) SendPingMessage2(remoteContact *Contact) {
-	fmt.Println("Sending ping to remoteContact: ", remoteContact)
-	conn, err := net.Dial("tcp", remoteContact.Address)
-	if err != nil {
-		fmt.Println("Error connecting to contact:", err)
-		return
-	}
-	defer conn.Close()
-
-	message := fmt.Sprintf("PING from %s (%s)", network.LocalAddr, network.LocalID.String())
-	_, err = conn.Write([]byte(message))
-	if err != nil {
-		fmt.Println("Error sending ping message:", err)
-	}
-}
-
-// func (network *Network) SendBootstrapInitPing(target Contact) {
-// 	botstrapPing := Msgs{
-// 		MsgsType: "PING",
-// 		Contact:  target,
-// 	}
-// 	network.pingPongCh <- botstrapPing
-// }
-
-// func handlePingMsgs(pingOriginAddr string) {
-// 	pingOriginIP, _, err := net.SplitHostPort(pingOriginAddr)
-// 	if err != nil {
-// 		fmt.Println("Error extracting IP from origin address:", err)
-// 		return
-// 	}
-
-// 	// Set the PONG response to be sent to the PING origin IP on port 8080
-// 	pingOriginWithPort := net.JoinHostPort(pingOriginIP, "8080")
-
-// 	conn, err := net.Dial("tcp", pingOriginWithPort)
-// 	if err != nil {
-// 		fmt.Println("Error connecting back to origin IP on port 8080:", err)
-// 		return
-// 	}
-// 	defer conn.Close()
-
-// 	localAddr := conn.LocalAddr().String()
-// 	pongMessage := "PONG from: " + localAddr
-// 	_, err = conn.Write([]byte(pongMessage))
-// 	if err != nil {
-// 		fmt.Println("Error sending PONG response:", err)
-// 		return
-// 	}
-
-// 	fmt.Println("Sent PONG message with server IP:", localAddr, "to", pingOriginWithPort)
-// }
 
 func handlePongMsgs(pongOriginIP string) {
 	fmt.Println("inside handlePongMsgs with pongOriginIP: ", pongOriginIP)
