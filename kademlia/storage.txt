@@ -1,0 +1,936 @@
+package kademlia
+
+import (
+	"container/list"
+	"fmt"
+)
+
+// bucket definition
+// contains a List
+type bucket struct {
+	list *list.List
+}
+
+// newBucket returns a new instance of a bucket
+func newBucket() *bucket {
+	bucket := &bucket{}
+	bucket.list = list.New()
+	return bucket
+}
+
+// AddContact adds the Contact to the front of the bucket
+// or moves it to the front of the bucket if it already existed
+func (bucket *bucket) AddContact(contact Contact) {
+	var element *list.Element
+	for e := bucket.list.Front(); e != nil; e = e.Next() {
+		nodeID := e.Value.(Contact).ID
+
+		if (contact).ID.Equals(nodeID) {
+			element = e
+		}
+	}
+
+	if element == nil {
+		if bucket.list.Len() < bucketSize {
+			bucket.list.PushFront(contact)
+		}
+	} else {
+		bucket.list.MoveToFront(element)
+	}
+	fmt.Println("Received BYE message:", bucket.list)
+}
+
+// GetContactAndCalcDistance returns an array of Contacts where
+// the distance has already been calculated
+func (bucket *bucket) GetContactAndCalcDistance(target *KademliaID) []Contact {
+	var contacts []Contact
+
+	for elt := bucket.list.Front(); elt != nil; elt = elt.Next() {
+		contact := elt.Value.(Contact)
+		contact.CalcDistance(target)
+		contacts = append(contacts, contact)
+	}
+
+	return contacts
+}
+
+// Len return the size of the bucket
+func (bucket *bucket) Len() int {
+	return bucket.list.Len()
+}
+package kademlia
+
+import (
+	"encoding/base64"
+	"fmt"
+	"net"
+	"strings"
+)
+
+// Network struct definition
+type Network struct {
+	LocalID   *KademliaID // The local node's Kademlia ID
+	LocalAddr string      // The local node's address
+	handler   MessageHandler
+}
+
+// MessageHandler interface for handling messages
+type MessageHandler interface {
+	HandleMessage(message string, senderAddr string) string
+}
+
+// Listen starts a listener on the specified IP and port
+func (network *Network) Listen(ip string, port int) {
+	addr := fmt.Sprintf("%s:%d", ip, port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		fmt.Println("Error starting the listener:", err)
+		return
+	}
+	defer listener.Close()
+
+	fmt.Println("Listening on", addr)
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection:", err)
+			continue
+		}
+		// Parse and handle the connection asynchronously
+		go network.parseConnection(conn)
+	}
+}
+
+func (network *Network) parseConnection(conn net.Conn) {
+	defer conn.Close()
+
+	// Read message from connection
+	buffer := make([]byte, 4096)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		fmt.Println("Error reading from connection:", err)
+		return
+	}
+
+	message := string(buffer[:n])
+	message = strings.TrimSpace(message)
+
+	remoteAddr := conn.RemoteAddr().String()
+
+	// Pass the message and remote address to the handler and get a response
+	if network.handler != nil {
+		response := network.handler.HandleMessage(message, remoteAddr)
+		if response != "" {
+			// Send response back
+			_, err := conn.Write([]byte(response))
+			if err != nil {
+				fmt.Println("Error sending response:", err)
+			}
+		}
+	} else {
+		fmt.Println("No message handler set")
+	}
+}
+
+// SendMessage sends a message to a given address and waits for a response
+func (network *Network) SendMessage(address string, message string) (string, error) {
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	_, err = conn.Write([]byte(message))
+	if err != nil {
+		return "", err
+	}
+
+	buffer := make([]byte, 4096)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		return "", err
+	}
+	response := string(buffer[:n])
+	response = strings.TrimSpace(response)
+	return response, nil
+}
+
+// SendPing sends a PING message to a given contact
+func (network *Network) SendPing(contact *Contact) error {
+	message := fmt.Sprintf("PING %s", network.LocalID.String())
+	response, err := network.SendMessage(contact.Address, message)
+	if err != nil {
+		fmt.Println("Error sending PING message:", err)
+		return err
+	}
+	// Handle the response
+	if network.handler != nil {
+		network.handler.HandleMessage(response, contact.Address)
+	}
+	return nil
+}
+
+// SendFindNode sends a FIND_NODE message to a given contact
+func (network *Network) SendFindNode(contact *Contact, targetID *KademliaID) ([]Contact, error) {
+	message := fmt.Sprintf("FIND_NODE %s", targetID.String())
+	response, err := network.SendMessage(contact.Address, message)
+	if err != nil {
+		fmt.Println("Error sending FIND_NODE message:", err)
+		return nil, err
+	}
+
+	// Handle the response
+	if strings.HasPrefix(response, "FIND_NODE_RESPONSE") {
+		contactsStr := strings.TrimPrefix(response, "FIND_NODE_RESPONSE ")
+		contactsList := strings.Split(contactsStr, ";")
+		var contacts []Contact
+		for _, contactStr := range contactsList {
+			parts := strings.Split(contactStr, "|")
+			if len(parts) != 2 {
+				continue
+			}
+			idStr := parts[0]
+			address := parts[1]
+			id := NewKademliaID(idStr)
+			contact := NewContact(id, address)
+			contacts = append(contacts, contact)
+		}
+		return contacts, nil
+	} else {
+		fmt.Println("Invalid FIND_NODE response:", response)
+		return nil, fmt.Errorf("Invalid FIND_NODE response")
+	}
+}
+
+func (network *Network) SendStore(contact *Contact, hash string, data []byte) error {
+	dataBase64 := base64.StdEncoding.EncodeToString(data)
+	message := fmt.Sprintf("STORE %s %s", hash, dataBase64)
+	response, err := network.SendMessage(contact.Address, message)
+	if err != nil {
+		fmt.Println("Error sending STORE message:", err)
+		return err
+	}
+	if response != "STORE_OK" {
+		fmt.Println("Error response from STORE:", response)
+		return fmt.Errorf("Store failed: %s", response)
+	}
+	return nil
+}
+
+// SendFindValue sends a FIND_VALUE message to a contact
+func (network *Network) SendFindValue(contact *Contact, hash string) ([]byte, error) {
+	message := fmt.Sprintf("FIND_VALUE %s", hash)
+	response, err := network.SendMessage(contact.Address, message)
+	if err != nil {
+		fmt.Println("Error sending FIND_VALUE message:", err)
+		return nil, err
+	}
+
+	if strings.HasPrefix(response, "VALUE") {
+		dataBase64 := strings.TrimPrefix(response, "VALUE ")
+		data, err := base64.StdEncoding.DecodeString(dataBase64)
+		if err != nil {
+			fmt.Println("Error decoding data:", err)
+			return nil, err
+		}
+		return data, nil
+	} else {
+		// Handle other responses
+		return nil, fmt.Errorf("Invalid FIND_VALUE response")
+	}
+}
+// TODO: Add package documentation for `kademlia`, like this:
+// Package kademlia something something...
+package kademlia
+# Use an official Golang image as the base image
+FROM golang:latest
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy Go module files and download dependencies
+COPY go.mod ./
+
+# Copy the entire source code
+COPY . .
+
+# Copy the entrypoint script into the container
+COPY scripts/entrypoint.sh scripts/entrypoint.sh
+
+# Give the entrypoint script execution permission
+RUN chmod +x scripts/entrypoint.sh
+
+# Build the Go application
+RUN go build -o kademlia_app ./cmd/main.go
+
+# Expose the port your application will run on
+EXPOSE 8080
+EXPOSE 8081
+
+# Set the entrypoint to the entrypoint script
+ENTRYPOINT ["scripts/entrypoint.sh"]
+
+# Run the Go application (this gets executed after the entrypoint script)
+CMD ["./kademlia_app"]
+module kademlia
+
+go 1.23
+package kademlia
+
+import (
+	"encoding/hex"
+	"math/rand"
+)
+
+// the static number of bytes in a KademliaID
+const IDLength = 20
+
+// type definition of a KademliaID
+type KademliaID [IDLength]byte
+
+// NewKademliaID returns a new instance of a KademliaID based on the string input
+func NewKademliaID(data string) *KademliaID {
+	decoded, _ := hex.DecodeString(data)
+
+	newKademliaID := KademliaID{}
+	for i := 0; i < IDLength; i++ {
+		newKademliaID[i] = decoded[i]
+	}
+
+	return &newKademliaID
+}
+
+// NewRandomKademliaID returns a new instance of a random KademliaID,
+// change this to a better version if you like
+func NewRandomKademliaID() *KademliaID {
+	newKademliaID := KademliaID{}
+	for i := 0; i < IDLength; i++ {
+		newKademliaID[i] = uint8(rand.Intn(256))
+	}
+	return &newKademliaID
+}
+
+// Less returns true if kademliaID < otherKademliaID (bitwise)
+func (kademliaID KademliaID) Less(otherKademliaID *KademliaID) bool {
+	for i := 0; i < IDLength; i++ {
+		if kademliaID[i] != otherKademliaID[i] {
+			return kademliaID[i] < otherKademliaID[i]
+		}
+	}
+	return false
+}
+
+// Equals returns true if kademliaID == otherKademliaID (bitwise)
+func (kademliaID KademliaID) Equals(otherKademliaID *KademliaID) bool {
+	for i := 0; i < IDLength; i++ {
+		if kademliaID[i] != otherKademliaID[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// CalcDistance returns a new instance of a KademliaID that is built
+// through a bitwise XOR operation betweeen kademliaID and target
+func (kademliaID KademliaID) CalcDistance(target *KademliaID) *KademliaID {
+	result := KademliaID{}
+	for i := 0; i < IDLength; i++ {
+		result[i] = kademliaID[i] ^ target[i]
+	}
+	return &result
+}
+
+// String returns a simple string representation of a KademliaID
+func (kademliaID *KademliaID) String() string {
+	return hex.EncodeToString(kademliaID[0:IDLength])
+}
+package kademlia
+
+import (
+	"crypto/sha1"
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
+	"sort"
+	"strings"
+)
+
+// Kademlia represents the Kademlia distributed hash table.
+type Kademlia struct {
+	Network      *Network
+	RoutingTable *RoutingTable
+	DataStore    map[string][]byte
+}
+
+// NewKademlia initializes a new Kademlia instance.
+func NewKademlia(localAddr string) *Kademlia {
+
+	network := &Network{
+		LocalID:   NewRandomKademliaID(),
+		LocalAddr: localAddr,
+	}
+
+	routingTable := NewRoutingTable(NewContact(network.LocalID, localAddr))
+
+	kademlia := &Kademlia{
+		Network:      network,
+		RoutingTable: routingTable,
+		DataStore:    make(map[string][]byte),
+	}
+
+	// Set the network's message handler to this Kademlia instance
+	network.handler = kademlia
+
+	return kademlia
+}
+
+// HandleMessage implements the MessageHandler interface
+func (kademlia *Kademlia) HandleMessage(message string, senderAddr string) string {
+	switch {
+	case strings.HasPrefix(message, "PING"):
+		return kademlia.handlePingMessage(message, senderAddr)
+	case strings.HasPrefix(message, "PONG"):
+		kademlia.handlePongMessage(message, senderAddr)
+		return ""
+	case strings.HasPrefix(message, "FIND_NODE"):
+		return kademlia.handleFindNodeMessage(message, senderAddr)
+	case strings.HasPrefix(message, "FIND_VALUE"):
+		return kademlia.handleFindValueMessage(message, senderAddr)
+	case strings.HasPrefix(message, "STORE"):
+		return kademlia.handleStoreMessage(message, senderAddr)
+	default:
+		fmt.Println("Received unknown message:", message)
+		return ""
+	}
+}
+
+func (kademlia *Kademlia) handlePingMessage(message string, senderAddr string) string {
+	fmt.Println("Received PING message from", senderAddr)
+	// Extract sender's ID from the message
+	parts := strings.Split(message, " ")
+	if len(parts) < 2 {
+		fmt.Println("Invalid PING message format")
+		return ""
+	}
+	senderIDStr := parts[1]
+	senderID := NewKademliaID(senderIDStr)
+	senderContact := NewContact(senderID, senderAddr)
+	kademlia.RoutingTable.AddContact(senderContact)
+
+	// Prepare PONG response including our own ID
+	response := fmt.Sprintf("PONG %s", kademlia.Network.LocalID.String())
+	return response
+}
+
+func (kademlia *Kademlia) handlePongMessage(message string, senderAddr string) {
+	fmt.Println("Received PONG message from", senderAddr)
+	// Extract sender's ID from the message
+	parts := strings.Split(message, " ")
+	if len(parts) < 2 {
+		fmt.Println("Invalid PONG message format")
+		return
+	}
+	senderIDStr := parts[1]
+	senderID := NewKademliaID(senderIDStr)
+	senderContact := NewContact(senderID, senderAddr)
+	kademlia.RoutingTable.AddContact(senderContact)
+}
+
+func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr string) string {
+	fmt.Println("Received FIND_NODE message from", senderAddr)
+	parts := strings.Split(message, " ")
+	if len(parts) < 2 {
+		fmt.Println("Invalid FIND_NODE message format")
+		return ""
+	}
+	targetIDStr := parts[1]
+	targetID := NewKademliaID(targetIDStr)
+
+	// Find closest contacts
+	closestContacts := kademlia.RoutingTable.FindClosestContacts(targetID, bucketSize)
+
+	// Prepare response
+	var contactsStrList []string
+	for _, contact := range closestContacts {
+		contactStr := fmt.Sprintf("%s|%s", contact.ID.String(), contact.Address)
+		contactsStrList = append(contactsStrList, contactStr)
+	}
+	responseMessage := "FIND_NODE_RESPONSE " + strings.Join(contactsStrList, ";")
+	return responseMessage
+}
+
+func (kademlia *Kademlia) handleStoreMessage(message string, senderAddr string) string {
+	fmt.Println("Received STORE message from", senderAddr)
+
+	parts := strings.SplitN(message, " ", 3)
+	if len(parts) < 3 {
+		fmt.Println("Invalid STORE message format")
+		return "STORE_ERROR Invalid format"
+	}
+	hash := parts[1]
+	dataBase64 := parts[2]
+	data, err := base64.StdEncoding.DecodeString(dataBase64)
+	if err != nil {
+		fmt.Println("Error decoding data:", err)
+		return "STORE_ERROR Decoding error"
+	}
+
+	kademlia.DataStore[hash] = data
+	fmt.Println("Stored data with hash:", hash)
+
+	// Return acknowledgment
+	return "STORE_OK"
+}
+
+func (kademlia *Kademlia) handleFindValueMessage(message string, senderAddr string) string {
+	fmt.Println("Received FIND_VALUE message from", senderAddr)
+
+	parts := strings.Split(message, " ")
+	if len(parts) < 2 {
+		fmt.Println("Invalid FIND_VALUE message format")
+		return ""
+	}
+	hash := parts[1]
+
+	if data, found := kademlia.DataStore[hash]; found {
+		responseMessage := fmt.Sprintf("VALUE %s", base64.StdEncoding.EncodeToString(data))
+		return responseMessage
+	} else {
+		// Optionally, send a response indicating data not found
+		responseMessage := "VALUE_NOT_FOUND"
+		return responseMessage
+	}
+}
+
+// Ping a contact
+func (kademlia *Kademlia) Ping(contact *Contact) {
+	err := kademlia.Network.SendPing(contact)
+	if err != nil {
+		fmt.Println("Error pinging contact:", err)
+	}
+}
+
+// SendFindNode sends a FIND_NODE message to a contact
+func (kademlia *Kademlia) SendFindNode(targetID *KademliaID, contact *Contact) []Contact {
+	contacts, err := kademlia.Network.SendFindNode(contact, targetID)
+	if err != nil {
+		fmt.Println("Error during SendFindNode:", err)
+		return nil
+	}
+	return contacts
+}
+
+// LookupContact performs an iterative node lookup
+func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
+	alpha := 3
+	k := bucketSize
+
+	// Initialize the shortlist with k closest contacts
+	closestContacts := kademlia.RoutingTable.FindClosestContacts(targetID, k)
+	shortlist := make(map[string]Contact)
+	queried := make(map[string]bool)
+
+	for _, contact := range closestContacts {
+		shortlist[contact.ID.String()] = contact
+	}
+
+	for {
+		// Find the α closest unqueried contacts
+		var unqueriedContacts []Contact
+		for _, contact := range shortlist {
+			if !queried[contact.ID.String()] {
+				unqueriedContacts = append(unqueriedContacts, contact)
+			}
+		}
+
+		if len(unqueriedContacts) == 0 {
+			break
+		}
+
+		// Sort unqueriedContacts by distance to target
+		sort.Slice(unqueriedContacts, func(i, j int) bool {
+			distI := unqueriedContacts[i].ID.CalcDistance(targetID)
+			distJ := unqueriedContacts[j].ID.CalcDistance(targetID)
+			return distI.Less(distJ)
+		})
+
+		// Select up to α contacts to query
+		numToQuery := alpha
+		if len(unqueriedContacts) < alpha {
+			numToQuery = len(unqueriedContacts)
+		}
+		contactsToQuery := unqueriedContacts[:numToQuery]
+
+		// For each contact to query
+		for _, contact := range contactsToQuery {
+			queried[contact.ID.String()] = true
+
+			// Send FIND_NODE to the contact
+			contactsReceived := kademlia.SendFindNode(targetID, &contact)
+
+			// Add the contact to the routing table
+			kademlia.RoutingTable.AddContact(contact)
+
+			// Add any new contacts received to the shortlist
+			for _, newContact := range contactsReceived {
+				if newContact.ID.Equals(kademlia.Network.LocalID) {
+					continue
+				}
+				if _, exists := shortlist[newContact.ID.String()]; !exists {
+					shortlist[newContact.ID.String()] = newContact
+				}
+			}
+		}
+	}
+
+	// Convert shortlist to a slice and sort
+	var finalContacts []Contact
+	for _, contact := range shortlist {
+		finalContacts = append(finalContacts, contact)
+	}
+
+	// Sort the finalContacts by distance to target
+	sort.Slice(finalContacts, func(i, j int) bool {
+		distI := finalContacts[i].ID.CalcDistance(targetID)
+		distJ := finalContacts[j].ID.CalcDistance(targetID)
+		return distI.Less(distJ)
+	})
+
+	// Return the k closest contacts
+	if len(finalContacts) > k {
+		finalContacts = finalContacts[:k]
+	}
+
+	return finalContacts
+}
+
+// Store stores data in the network
+func (kademlia *Kademlia) Store(data []byte) string {
+	// Compute the hash of the data
+	hash := sha1.Sum(data)
+	hashString := hex.EncodeToString(hash[:])
+	fmt.Println("Storing data with hash:", hashString)
+
+	// Find the k closest nodes to the hash
+	targetID := NewKademliaID(hashString)
+	closestContacts := kademlia.LookupContact(targetID)
+	fmt.Println("Closest contacts to hash:", closestContacts)
+
+	// Send STORE messages to each contact
+	for _, contact := range closestContacts {
+		kademlia.Network.SendStore(&contact, hashString, data)
+	}
+
+	// Optionally store the data locally if this node is among the closest
+	for _, contact := range closestContacts {
+		if contact.ID.Equals(kademlia.Network.LocalID) {
+			kademlia.DataStore[hashString] = data
+			break
+		}
+	}
+
+	return hashString
+}
+
+// LookupData retrieves data from the network
+func (kademlia *Kademlia) LookupData(hash string) ([]byte, error) {
+	// Check local datastore
+	if data, found := kademlia.DataStore[hash]; found {
+		return data, nil
+	}
+
+	// Perform iterative lookup
+	targetID := NewKademliaID(hash)
+	closestContacts := kademlia.LookupContact(targetID)
+
+	for _, contact := range closestContacts {
+		data, err := kademlia.Network.SendFindValue(&contact, hash)
+		if err == nil && data != nil {
+			// Store data locally
+			kademlia.DataStore[hash] = data
+			return data, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Data not found for hash: %s", hash)
+}
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"kademlia"
+	"net/http"
+	"os"
+)
+
+func main() {
+	fmt.Println("Starting Kademlia network...")
+
+	// Retrieve the node's address and peer's contact address from environment variables
+	localAddr := os.Getenv("CONTAINER_IP")
+	contactAddr := os.Getenv("CONTACT_ADDRESS")
+	if localAddr == "" {
+		localAddr = "127.0.0.1"
+	}
+
+	// Create a new Kademlia instance
+	myKademlia := kademlia.NewKademlia(localAddr)
+
+	// Start listening on the node's address
+	go myKademlia.Network.Listen("0.0.0.0", 8080)
+
+	// Create a contact for the peer node
+	if contactAddr != "" {
+		contact := kademlia.NewContact(nil, contactAddr)
+		myKademlia.Network.SendPing(&contact)
+		myKademlia.LookupContact(myKademlia.Network.LocalID)
+	} else {
+		fmt.Println("CONTACT_ADDRESS not set in environment")
+	}
+
+	// Set up HTTP handlers
+	http.HandleFunc("/put", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		data := r.FormValue("data")
+		hash := myKademlia.Store([]byte(data))
+		fmt.Fprintf(w, "Data stored with hash: %s", hash)
+	})
+
+	http.HandleFunc("/get", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		hash := r.URL.Query().Get("hash")
+		data, err := myKademlia.LookupData(hash)
+		if err != nil {
+			http.Error(w, "Data not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"data": string(data)})
+	})
+
+	// Start HTTP server
+	fmt.Println("HTTP server listening on port 8001")
+	http.ListenAndServe(":8001", nil)
+
+	select {}
+}
+#!/bin/sh
+
+# Get the dynamically assigned IP address of the container
+CONTAINER_IP=$(hostname -i)
+
+# Export the IP address as an environment variable
+export CONTAINER_IP
+
+echo "Container IP Address: $CONTAINER_IP"
+
+# Call the main process (Go app) with the new environment variable
+exec "$@"
+package kademlia
+
+import (
+	"fmt"
+	"sort"
+)
+
+// Contact definition
+// stores the KademliaID, the ip address and the distance
+type Contact struct {
+	ID       *KademliaID
+	Address  string
+	distance *KademliaID
+}
+
+// NewContact returns a new instance of a Contact
+func NewContact(id *KademliaID, address string) Contact {
+	return Contact{id, address, nil}
+}
+
+// CalcDistance calculates the distance to the target and
+// fills the contacts distance field
+func (contact *Contact) CalcDistance(target *KademliaID) {
+	contact.distance = contact.ID.CalcDistance(target)
+}
+
+// Less returns true if contact.distance < otherContact.distance
+func (contact *Contact) Less(otherContact *Contact) bool {
+	return contact.distance.Less(otherContact.distance)
+}
+
+// String returns a simple string representation of a Contact
+func (contact *Contact) String() string {
+	return fmt.Sprintf(`contact("%s", "%s")`, contact.ID, contact.Address)
+}
+
+// ContactCandidates definition
+// stores an array of Contacts
+type ContactCandidates struct {
+	contacts []Contact
+}
+
+// Append an array of Contacts to the ContactCandidates
+func (candidates *ContactCandidates) Append(contacts []Contact) {
+	candidates.contacts = append(candidates.contacts, contacts...)
+}
+
+// GetContacts returns the first count number of Contacts
+func (candidates *ContactCandidates) GetContacts(count int) []Contact {
+	return candidates.contacts[:count]
+}
+
+// Sort the Contacts in ContactCandidates
+func (candidates *ContactCandidates) Sort() {
+	sort.Sort(candidates)
+}
+
+// Len returns the length of the ContactCandidates
+func (candidates *ContactCandidates) Len() int {
+	return len(candidates.contacts)
+}
+
+// Swap the position of the Contacts at i and j
+// WARNING does not check if either i or j is within range
+func (candidates *ContactCandidates) Swap(i, j int) {
+	candidates.contacts[i], candidates.contacts[j] = candidates.contacts[j], candidates.contacts[i]
+}
+
+// Less returns true if the Contact at index i is smaller than
+// the Contact at index j
+func (candidates *ContactCandidates) Less(i, j int) bool {
+	return candidates.contacts[i].Less(&candidates.contacts[j])
+}
+package kademlia
+
+const bucketSize = 20
+
+// RoutingTable definition
+// keeps a refrence contact of me and an array of buckets
+type RoutingTable struct {
+	me      Contact
+	buckets [IDLength * 8]*bucket
+}
+
+// NewRoutingTable returns a new instance of a RoutingTable
+func NewRoutingTable(me Contact) *RoutingTable {
+	routingTable := &RoutingTable{}
+	for i := 0; i < IDLength*8; i++ {
+		routingTable.buckets[i] = newBucket()
+	}
+	routingTable.me = me
+	return routingTable
+}
+
+// AddContact add a new contact to the correct Bucket
+func (routingTable *RoutingTable) AddContact(contact Contact) {
+	bucketIndex := routingTable.getBucketIndex(contact.ID)
+	bucket := routingTable.buckets[bucketIndex]
+	bucket.AddContact(contact)
+}
+
+// FindClosestContacts finds the count closest Contacts to the target in the RoutingTable
+func (routingTable *RoutingTable) FindClosestContacts(target *KademliaID, count int) []Contact {
+	var candidates ContactCandidates
+	bucketIndex := routingTable.getBucketIndex(target)
+	bucket := routingTable.buckets[bucketIndex]
+
+	candidates.Append(bucket.GetContactAndCalcDistance(target))
+
+	for i := 1; (bucketIndex-i >= 0 || bucketIndex+i < IDLength*8) && candidates.Len() < count; i++ {
+		if bucketIndex-i >= 0 {
+			bucket = routingTable.buckets[bucketIndex-i]
+			candidates.Append(bucket.GetContactAndCalcDistance(target))
+		}
+		if bucketIndex+i < IDLength*8 {
+			bucket = routingTable.buckets[bucketIndex+i]
+			candidates.Append(bucket.GetContactAndCalcDistance(target))
+		}
+	}
+
+	candidates.Sort()
+
+	if count > candidates.Len() {
+		count = candidates.Len()
+	}
+
+	return candidates.GetContacts(count)
+}
+
+// getBucketIndex get the correct Bucket index for the KademliaID
+func (routingTable *RoutingTable) getBucketIndex(id *KademliaID) int {
+	distance := id.CalcDistance(routingTable.me.ID)
+	for i := 0; i < IDLength; i++ {
+		for j := 0; j < 8; j++ {
+			if (distance[i]>>uint8(7-j))&0x1 != 0 {
+				return i*8 + j
+			}
+		}
+	}
+
+	return IDLength*8 - 1
+}
+version: '3'
+
+services:
+  root_node:
+    image: kademlia-app
+    networks:
+      kademlia_network:
+        ipv4_address: 172.16.238.10  # Static IP for the root node
+    ports:
+      - "8080:8080"  # Expose root node's port to host for debugging purposes
+
+  kademlia_node:
+    image: kademlia-app
+    environment:
+      - CONTACT_ADDRESS=172.16.238.10:8080  # Contact root node via its static IP
+    depends_on:
+      - root_node
+    networks:
+      - kademlia_network
+    deploy:
+      replicas: 2
+
+
+networks:
+  kademlia_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.238.0/24  # Manually configure the subnet for static IPs
+package kademlia
+
+import (
+	"fmt"
+	"testing"
+)
+
+// FIXME: This test doesn't actually test anything. There is only one assertion
+// that is included as an example.
+
+func TestRoutingTable(t *testing.T) {
+	rt := NewRoutingTable(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "localhost:8000"))
+
+	rt.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "localhost:8001"))
+	rt.AddContact(NewContact(NewKademliaID("1111111100000000000000000000000000000000"), "localhost:8002"))
+	rt.AddContact(NewContact(NewKademliaID("1111111200000000000000000000000000000000"), "localhost:8002"))
+	rt.AddContact(NewContact(NewKademliaID("1111111300000000000000000000000000000000"), "localhost:8002"))
+	rt.AddContact(NewContact(NewKademliaID("1111111400000000000000000000000000000000"), "localhost:8002"))
+	rt.AddContact(NewContact(NewKademliaID("2111111400000000000000000000000000000000"), "localhost:8002"))
+
+	contacts := rt.FindClosestContacts(NewKademliaID("2111111400000000000000000000000000000000"), 20)
+	for i := range contacts {
+		fmt.Println(contacts[i].String())
+	}
+
+	// TODO: This is just an example. Make more meaningful assertions.
+	if len(contacts) != 6 {
+		t.Fatalf("Expected 6 contacts but instead got %d", len(contacts))
+	}
+}

@@ -56,11 +56,19 @@ func (network *Network) parseConnection(conn net.Conn) {
 	message := string(buffer[:n])
 	message = strings.TrimSpace(message)
 
-	remoteAddr := conn.RemoteAddr().String()
+	// Get the remote IP address without the port
+	remoteIP, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+	if err != nil {
+		fmt.Println("Error parsing remote address:", err)
+		return
+	}
+
+	// Since all nodes listen on port 8080, append it to the IP
+	senderAddress := net.JoinHostPort(remoteIP, "8080")
 
 	// Pass the message and remote address to the handler and get a response
 	if network.handler != nil {
-		response := network.handler.HandleMessage(message, remoteAddr)
+		response := network.handler.HandleMessage(message, senderAddress)
 		if response != "" {
 			// Send response back
 			_, err := conn.Write([]byte(response))
