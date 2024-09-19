@@ -7,16 +7,17 @@ import (
 type Kademlia struct {
 	Network      *Network
 	RoutingTable *RoutingTable
-	pingPongCh   chan Msgs
+	pingPongCh   chan ChMsgs
 }
 
-type Msgs struct {
-	MsgsType string
-	Contact  Contact
+type ChMsgs struct {
+	MsgsType   string
+	SenderID   string
+	SenderAddr string
 }
 
 func InitKademlia(localAddr string, rootAddr string) *Kademlia {
-	pingPongCh := make(chan Msgs)
+	pingPongCh := make(chan ChMsgs)
 
 	var me Contact
 	if localAddr == "172.16.238.10" {
@@ -34,15 +35,14 @@ func InitKademlia(localAddr string, rootAddr string) *Kademlia {
 
 	myRoutingTable := NewRoutingTable(me)
 
-	// Initi kademlia and set its network
 	k := &Kademlia{
 		Network:      myNetwork,
 		RoutingTable: myRoutingTable,
 		pingPongCh:   pingPongCh,
 	}
 
-	go k.Network.Listen("0.0.0.0", 8080) // every node listens on incomeing net traffic on 8080
-	go k.ListenForMsgs()                 // set kademlia to listen for msgs on channel
+	go k.Network.Listen("0.0.0.0", 8080)
+	go k.ListenForMsgs()
 
 	return k
 }
@@ -53,19 +53,23 @@ func (k *Kademlia) ListenForMsgs() {
 			switch msgs.MsgsType {
 
 			case "PING":
-				fmt.Println("Network module sent CH msgs about PING from contact:", msgs.Contact)
-				k.RoutingTable.AddContact(msgs.Contact) // add contact of incoming ping to rt
+				fmt.Println("Network module sent CH msgs about PING from: ", msgs.SenderAddr)
+				contact := NewContact(NewKademliaID(msgs.SenderID), msgs.SenderAddr)
+				k.RoutingTable.AddContact(contact)
 				go PrintAllContacts(k.RoutingTable)
-				pongMsg := Msgs{
-					MsgsType: "PONG",
-					Contact:  k.RoutingTable.me, // send me back in the PONG
 
+				// Send PONG response
+				pongMsg := ChMsgs{
+					MsgsType:   "PONG",
+					SenderID:   k.RoutingTable.me.ID.String(),
+					SenderAddr: k.RoutingTable.me.Address,
 				}
 				k.pingPongCh <- pongMsg
 
 			case "PONG":
-				fmt.Println("Network module sent CH msgs about PONG from contact:", msgs.Contact)
-				k.RoutingTable.AddContact(msgs.Contact)
+				fmt.Println("Network module sent CH msgs about PONG from: ", msgs.SenderAddr)
+				contact := NewContact(NewKademliaID(msgs.SenderID), msgs.SenderAddr)
+				k.RoutingTable.AddContact(contact)
 				go PrintAllContacts(k.RoutingTable)
 
 			default:
@@ -87,16 +91,4 @@ func PrintAllContacts(rt *RoutingTable) {
 			fmt.Printf("Contact ID: %s, Address: %s\n", contact.ID.String(), contact.Address)
 		}
 	}
-}
-
-func (kademlia *Kademlia) LookupContact(target *Contact) {
-	// TODO
-}
-
-func (kademlia *Kademlia) LookupData(hash string) {
-	// TODO
-}
-
-func (kademlia *Kademlia) Store(data []byte) {
-	// TODO
 }
