@@ -55,13 +55,14 @@ func (network *Network) parseConnection(conn net.Conn) {
 		}
 
 		network.pingPongCh <- ChMsgs{
-			MsgsType:   "PING",
+			ChCmd:      "PING",
 			SenderAddr: pingOriginAddr,
 			SenderID:   pingOriginID,
 		}
 
 		pongMsgs := <-network.pingPongCh
-		if pongMsgs.MsgsType == "PONG" {
+
+		if pongMsgs.ChCmd == "PONG" {
 			network.sendPongResponse(pingOriginAddr)
 		} else {
 			fmt.Println("Unexpected message received:", pongMsgs)
@@ -77,7 +78,7 @@ func (network *Network) parseConnection(conn net.Conn) {
 		}
 
 		network.pingPongCh <- ChMsgs{
-			MsgsType:   "PONG",
+			ChCmd:      "PONG",
 			SenderAddr: pongOriginAddr,
 			SenderID:   pongOriginID,
 		}
@@ -123,4 +124,58 @@ func (network *Network) sendPongResponse(pingOriginAddr string) {
 	}
 
 	fmt.Println("Sent PONG message with server IP:", network.LocalAddr, "to", pongIP)
+}
+
+// SendFindNode sends a FIND_NODE message to a given contact
+func (network *Network) SendFindNode(contact *Contact, targetID *KademliaID) ([]Contact, error) {
+	message := fmt.Sprintf("FIND_NODE %s", targetID.String())
+	response, err := network.SendMessage(contact.Address, message)
+	if err != nil {
+		fmt.Println("Error sending FIND_NODE message:", err)
+		return nil, err
+	}
+
+	// Handle the response
+	if strings.HasPrefix(response, "FIND_NODE_RESPONSE") {
+		contactsStr := strings.TrimPrefix(response, "FIND_NODE_RESPONSE ")
+		contactsList := strings.Split(contactsStr, ";")
+		var contacts []Contact
+		for _, contactStr := range contactsList {
+			parts := strings.Split(contactStr, "|")
+			if len(parts) != 2 {
+				continue
+			}
+			idStr := parts[0]
+			address := parts[1]
+			id := NewKademliaID(idStr)
+			contact := NewContact(id, address)
+			contacts = append(contacts, contact)
+		}
+		return contacts, nil
+	} else {
+		fmt.Println("Invalid FIND_NODE response:", response)
+		return nil, fmt.Errorf("Invalid FIND_NODE response")
+	}
+}
+
+// SendMessage sends a message to a given address and waits for a response
+func (network *Network) SendMessage(address string, message string) (string, error) {
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	_, err = conn.Write([]byte(message))
+	if err != nil {
+		return "", err
+	}
+
+	buffer := make([]byte, 4096)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		return "", err
+	}
+	response := string(buffer[:n])
+	response = strings.TrimSpace(response)
+	return response, nil
 }
