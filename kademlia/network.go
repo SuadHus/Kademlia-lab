@@ -35,7 +35,7 @@ func (network *Network) Listen(ip string, port int) {
 func (network *Network) parseConnection(conn net.Conn) {
 	defer conn.Close()
 
-	buffer := make([]byte, 1024)
+	buffer := make([]byte, 4096)
 	n, err := conn.Read(buffer)
 	if err != nil {
 		fmt.Println("Error reading from connection:", err)
@@ -44,40 +44,92 @@ func (network *Network) parseConnection(conn net.Conn) {
 
 	message := string(buffer[:n])
 	message = strings.TrimSpace(message)
+	fmt.Println("Received NET message:", message)
 
-	switch {
-	case strings.HasPrefix(message, "PING"):
-		fmt.Println("Received NET message:", message)
-		var pingOriginAddr, pingOriginID string
-		_, err := fmt.Sscanf(message, "PING from %s %s", &pingOriginAddr, &pingOriginID)
+	fields := strings.Fields(message)
+	if len(fields) < 4 || fields[1] != "from" {
+		fmt.Println("Invalid message format:", message)
+		return
+	}
+
+	command := fields[0]
+	senderAddr := fields[2]
+	senderID := fields[3]
+	var targetID string
+	if len(fields) >= 5 {
+		targetID = fields[4]
+	}
+
+	switch command {
+	case "PING":
+		fmt.Println("Received PING message from:", senderAddr)
+		network.cmdChannel <- CmdChMsgs{
+			KademCmd:   "PING",
+			SenderAddr: senderAddr,
+			SenderID:   senderID,
+		}
+
+		// Send PONG response over the same connection
+		pongMessage := fmt.Sprintf("PONG from %s %s", network.LocalAddr, network.LocalID.String())
+		_, err = conn.Write([]byte(pongMessage))
 		if err != nil {
-			fmt.Println("Error parsing PING message:", err)
+			fmt.Println("Error sending PONG response:", err)
 			return
 		}
 
+	case "FIND_NODE":
+		if targetID == "" {
+			fmt.Println("Missing target ID in FIND_NODE message")
+			return
+		}
+		fmt.Println("Received FIND_NODE message from:", senderAddr)
 		network.cmdChannel <- CmdChMsgs{
-			KademCmd:   "PING",
-			SenderAddr: pingOriginAddr,
-			SenderID:   pingOriginID,
+			KademCmd:   "FIND_NODE",
+			SenderAddr: senderAddr,
+			SenderID:   senderID,
+			TargetID:   targetID,
 		}
 
-		pongMsgs := <-network.cmdChannel
+		kademliaDataResponse := <-network.dataChannel
 
-		if pongMsgs.KademCmd == "PONG" {
-			network.sendPongResponse(pingOriginAddr)
-		} else {
-			fmt.Println("Unexpected message received:", pongMsgs)
+		// Send FIND_NODE_RESPONSE back over the same connection
+		contactsStr := ""
+		for _, contact := range kademliaDataResponse.Contacts {
+			contactsStr += fmt.Sprintf("%s|%s;", contact.ID.String(), contact.Address)
 		}
 
-	case strings.HasPrefix(message, "PONG"):
-		fmt.Println("Received NET message:", message)
-		//send back pong
+		response := fmt.Sprintf("FIND_NODE_RESPONSE %s", contactsStr)
+		fmt.Println("Sending FIND_NODE_RESPONSE:", response)
 
-		var pongOriginAddr, pongOriginID string
-
-		_, err := fmt.Sscanf(message, "PONG from %s %s", &pongOriginAddr, &pongOriginID)
+		_, err = conn.Write([]byte(response))
 		if err != nil {
-			fmt.Println("Error parsing PONG message:", err)
+			fmt.Println("Error sending FIND_NODE_RESPONSE message:", err)
+			return
+		}
+
+	default:
+		fmt.Println("Received unknown command:", command)
+	}
+}
+
+func (network *Network) SendPingMessage(remoteContact *Contact) {
+	fmt.Println("Sending PING to remoteContact:", remoteContact)
+
+	pingMessage := fmt.Sprintf("PING from %s %s", network.LocalAddr, network.LocalID.String())
+
+	response, err := network.SendMessage(remoteContact.Address, pingMessage)
+	if err != nil {
+		fmt.Println("Error sending PING message:", err)
+		return
+	}
+
+	fmt.Println("Received response to PING:", response)
+
+	if strings.HasPrefix(response, "PONG") {
+		var pongOriginAddr, pongOriginID string
+		_, err := fmt.Sscanf(response, "PONG from %s %s", &pongOriginAddr, &pongOriginID)
+		if err != nil {
+			fmt.Println("Error parsing PONG response:", err)
 			return
 		}
 		network.cmdChannel <- CmdChMsgs{
@@ -85,63 +137,13 @@ func (network *Network) parseConnection(conn net.Conn) {
 			SenderAddr: pongOriginAddr,
 			SenderID:   pongOriginID,
 		}
-
-	case strings.HasPrefix(message, "FIND_NODE"):
-		fmt.Println("Parse con, FIND_NODE case")
-
-		network.cmdChannel <- CmdChMsgs{
-			KademCmd: "FIND_NODE",
-		}
-		kademliaDataResponse := <-network.dataChannel
-
-		fmt.Println(kademliaDataResponse)
-
-	default:
-		fmt.Println("Received unknown message:", message)
+	} else {
+		fmt.Println("Unexpected response to PING:", response)
 	}
 }
 
-func (network *Network) SendPingMessage(remoteContact *Contact) {
-	fmt.Println("Sending NET PING to remoteContact: ", remoteContact)
-	conn, err := net.Dial("tcp", remoteContact.Address)
-	if err != nil {
-		fmt.Println("Error connecting to contact:", err)
-		return
-	}
-	defer conn.Close()
-
-	pingMessage := fmt.Sprintf("PING from %s %s", network.LocalAddr, network.LocalID.String())
-
-	_, err = conn.Write([]byte(pingMessage))
-	if err != nil {
-		fmt.Println("Error sending ping message:", err)
-	}
-}
-
-func (network *Network) sendPongResponse(pingOriginAddr string) {
-	fmt.Println("Sending NET PONG to remoteContact: ", pingOriginAddr)
-	pongIP := net.JoinHostPort(pingOriginAddr, "8080")
-
-	conn, err := net.Dial("tcp", pongIP)
-	if err != nil {
-		fmt.Println("Error connecting back to origin on port 8080:", err)
-		return
-	}
-	defer conn.Close()
-
-	pongMessage := fmt.Sprintf("PONG from %s %s", network.LocalAddr, network.LocalID.String())
-	_, err = conn.Write([]byte(pongMessage))
-	if err != nil {
-		fmt.Println("Error sending PONG message:", err)
-		return
-	}
-
-	fmt.Println("Sent PONG message with server IP:", network.LocalAddr, "to", pongIP)
-}
-
-// SendFindNode sends a FIND_NODE message to a given contact
 func (network *Network) SendFindNode(contact *Contact, targetID *KademliaID) ([]Contact, error) {
-	message := fmt.Sprintf("FIND_NODE %s", targetID.String())
+	message := fmt.Sprintf("FIND_NODE from %s %s %s", network.LocalAddr, network.LocalID.String(), targetID.String())
 	response, err := network.SendMessage(contact.Address, message)
 	if err != nil {
 		fmt.Println("Error sending FIND_NODE message:", err)
@@ -173,7 +175,7 @@ func (network *Network) SendFindNode(contact *Contact, targetID *KademliaID) ([]
 
 // SendMessage sends a message to a given address and waits for a response
 func (network *Network) SendMessage(address string, message string) (string, error) {
-	conn, err := net.Dial("tcp", address)
+	conn, err := net.Dial("tcp", address+":8080")
 	if err != nil {
 		return "", err
 	}
