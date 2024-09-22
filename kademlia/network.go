@@ -9,7 +9,6 @@ import (
 type Network struct {
 	LocalID     *KademliaID
 	LocalAddr   string
-	pingPongCh  chan ChMsgs
 	cmdChannel  chan CmdChMsgs  // <---
 	dataChannel chan DataChMsgs // --->
 }
@@ -56,15 +55,15 @@ func (network *Network) parseConnection(conn net.Conn) {
 			return
 		}
 
-		network.pingPongCh <- ChMsgs{
-			ChCmd:      "PING",
+		network.cmdChannel <- CmdChMsgs{
+			KademCmd:   "PING",
 			SenderAddr: pingOriginAddr,
 			SenderID:   pingOriginID,
 		}
 
-		pongMsgs := <-network.pingPongCh
+		pongMsgs := <-network.cmdChannel
 
-		if pongMsgs.ChCmd == "PONG" {
+		if pongMsgs.KademCmd == "PONG" {
 			network.sendPongResponse(pingOriginAddr)
 		} else {
 			fmt.Println("Unexpected message received:", pongMsgs)
@@ -72,11 +71,19 @@ func (network *Network) parseConnection(conn net.Conn) {
 
 	case strings.HasPrefix(message, "PONG"):
 		fmt.Println("Received NET message:", message)
+		//send back pong
+
 		var pongOriginAddr, pongOriginID string
+
 		_, err := fmt.Sscanf(message, "PONG from %s %s", &pongOriginAddr, &pongOriginID)
 		if err != nil {
 			fmt.Println("Error parsing PONG message:", err)
 			return
+		}
+		network.cmdChannel <- CmdChMsgs{
+			KademCmd:   "PONG",
+			SenderAddr: pongOriginAddr,
+			SenderID:   pongOriginID,
 		}
 
 	case strings.HasPrefix(message, "FIND_NODE"):

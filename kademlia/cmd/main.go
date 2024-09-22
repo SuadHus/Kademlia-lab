@@ -18,7 +18,7 @@ func main() {
 		contact := kademlia.NewContact(id, rootAddr)
 		myKademlia.Network.SendPingMessage(&contact)
 	} else {
-		fmt.Println("ROOT_ADDRESS not set in environment or same as local")
+		fmt.Println("root node does not init ping")
 	}
 
 	// Keep the application running

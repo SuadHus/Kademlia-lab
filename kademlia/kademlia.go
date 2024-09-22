@@ -10,7 +10,6 @@ const alpha = 3
 type Kademlia struct {
 	Network      *Network
 	RoutingTable *RoutingTable
-	pingPongCh   chan ChMsgs
 
 	cmdChannel  chan CmdChMsgs
 	dataChannel chan DataChMsgs
@@ -44,7 +43,6 @@ type DataChMsgs struct {
 }
 
 func InitKademlia(localAddr string, rootAddr string) *Kademlia {
-	pingPongCh := make(chan ChMsgs)
 
 	cmdChannel := make(chan CmdChMsgs)
 	dataChannel := make(chan DataChMsgs)
@@ -60,7 +58,6 @@ func InitKademlia(localAddr string, rootAddr string) *Kademlia {
 	myNetwork := &Network{
 		LocalID:     me.ID,
 		LocalAddr:   localAddr,
-		pingPongCh:  pingPongCh,
 		cmdChannel:  cmdChannel,
 		dataChannel: dataChannel,
 	}
@@ -72,7 +69,6 @@ func InitKademlia(localAddr string, rootAddr string) *Kademlia {
 	k := &Kademlia{
 		Network:      myNetwork,
 		RoutingTable: myRoutingTable,
-		pingPongCh:   pingPongCh,
 		cmdChannel:   cmdChannel,
 		dataChannel:  dataChannel,
 	}
@@ -187,8 +183,8 @@ func (kademlia *Kademlia) Store(data []byte) {
 
 func (k *Kademlia) ListenForChMsgs() {
 	go func() {
-		for msgs := range k.pingPongCh {
-			switch msgs.ChCmd {
+		for msgs := range k.cmdChannel {
+			switch msgs.KademCmd {
 
 			case "PING":
 				fmt.Println("Network module sent CH msgs about PING from: ", msgs.SenderAddr)
@@ -197,12 +193,12 @@ func (k *Kademlia) ListenForChMsgs() {
 				go PrintAllContacts(k.RoutingTable)
 
 				// Send PONG response
-				pongMsg := ChMsgs{
-					ChCmd:      "PONG",
+				pongMsg := CmdChMsgs{
+					KademCmd:   "PONG",
 					SenderID:   k.RoutingTable.me.ID.String(),
 					SenderAddr: k.RoutingTable.me.Address,
 				}
-				k.pingPongCh <- pongMsg
+				k.cmdChannel <- pongMsg
 
 			case "PONG":
 				fmt.Println("Network module sent CH msgs about PONG from: ", msgs.SenderAddr)
@@ -223,7 +219,7 @@ func (k *Kademlia) ListenForChMsgs() {
 				k.dataChannel <- dataMsgs
 
 			default:
-				fmt.Println("Received unknown message type:", msgs.ChCmd)
+				fmt.Println("Received unknown message type:", msgs.KademCmd)
 			}
 		}
 	}()
