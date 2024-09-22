@@ -20,7 +20,7 @@ func main() {
 		myKademlia.Network.SendPingMessage(&contact)
 		time.Sleep(1 * time.Second)
 
-		fmt.Println("hallå", myKademlia.LookupContact(myKademlia.RoutingTable.Me.ID))
+		fmt.Println("looking up myself", myKademlia.LookupContact(myKademlia.RoutingTable.Me.ID))
 		//fmt.Println(myKademlia.Network.SendFindNode(&contact, id))
 
 	} else {
