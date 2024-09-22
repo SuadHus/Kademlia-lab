@@ -15,9 +15,11 @@ services:
   kademlia_node:
     image: kademlia-app
     environment:
-      - CONTACT_ADDRESS=172.16.238.10:8080  # Contact root node via its static IP
+      - ROOT_ADDRESS=172.16.238.10  # Contact root node via its static IP
     networks:
       - kademlia_network
+    depends_on:
+      - root_node
     deploy:
       replicas: 10
 
