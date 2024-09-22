@@ -7,9 +7,11 @@ import (
 )
 
 type Network struct {
-	LocalID    *KademliaID
-	LocalAddr  string
-	pingPongCh chan ChMsgs
+	LocalID     *KademliaID
+	LocalAddr   string
+	pingPongCh  chan ChMsgs
+	cmdChannel  chan CmdChMsgs  // <---
+	dataChannel chan DataChMsgs // --->
 }
 
 func (network *Network) Listen(ip string, port int) {
@@ -77,10 +79,11 @@ func (network *Network) parseConnection(conn net.Conn) {
 			return
 		}
 
-		network.pingPongCh <- ChMsgs{
-			ChCmd:      "PONG",
-			SenderAddr: pongOriginAddr,
-			SenderID:   pongOriginID,
+	case strings.HasPrefix(message, "FIND_NODE"):
+		fmt.Println("Parse con, FIND_NODE case")
+
+		network.cmdChannel <- CmdChMsgs{
+			KademCmd: "FIND_NODE",
 		}
 
 	default:

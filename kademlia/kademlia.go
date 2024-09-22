@@ -11,6 +11,9 @@ type Kademlia struct {
 	Network      *Network
 	RoutingTable *RoutingTable
 	pingPongCh   chan ChMsgs
+
+	cmdChannel  chan CmdChMsgs
+	dataChannel chan DataChMsgs
 }
 
 // type ChMsgs struct {
@@ -20,16 +23,31 @@ type Kademlia struct {
 // }
 
 type ChMsgs struct {
-	ChCmd      string         // Command type ("PING", "PONG", "LOOKUP", etc.)
-	SenderID   string         // The ID of the sender node
-	SenderAddr string         // The network address of the sender
-	TargetID   string         // The target ID (used for LOOKUP or FIND_NODE commands)
-	Data       []byte         // Data (used for STORE commands or to carry extra info)
-	ResponseCh chan []Contact // Response channel for sending back contacts (used in LOOKUP)
+	ChCmd      string // Command type ("PING", "PONG", "LOOKUP", etc.)
+	SenderID   string // The ID of the sender node
+	SenderAddr string // The network address of the sender
+	TargetID   string // The target ID (used for LOOKUP or FIND_NODE commands)
+}
+
+type CmdChMsgs struct {
+	KademCmd   string
+	SenderID   string
+	SenderAddr string
+	TargetID   string
+}
+
+type DataChMsgs struct {
+	NetCdm   string
+	Contacts []Contact
+	Data     []byte // Data (used for STORE commands or to carry extra info)
+
 }
 
 func InitKademlia(localAddr string, rootAddr string) *Kademlia {
 	pingPongCh := make(chan ChMsgs)
+
+	cmdChannel := make(chan CmdChMsgs)
+	dataChannel := make(chan DataChMsgs)
 
 	var me Contact
 	if localAddr == "172.16.238.10" {
@@ -40,10 +58,14 @@ func InitKademlia(localAddr string, rootAddr string) *Kademlia {
 	}
 
 	myNetwork := &Network{
-		LocalID:    me.ID,
-		LocalAddr:  localAddr,
-		pingPongCh: pingPongCh,
+		LocalID:     me.ID,
+		LocalAddr:   localAddr,
+		pingPongCh:  pingPongCh,
+		cmdChannel:  cmdChannel,
+		dataChannel: dataChannel,
 	}
+
+	// go listen for data msgs
 
 	myRoutingTable := NewRoutingTable(me)
 
@@ -51,6 +73,8 @@ func InitKademlia(localAddr string, rootAddr string) *Kademlia {
 		Network:      myNetwork,
 		RoutingTable: myRoutingTable,
 		pingPongCh:   pingPongCh,
+		cmdChannel:   cmdChannel,
+		dataChannel:  dataChannel,
 	}
 
 	go k.Network.Listen("0.0.0.0", 8080)
@@ -186,17 +210,17 @@ func (k *Kademlia) ListenForChMsgs() {
 				k.RoutingTable.AddContact(contact)
 				go PrintAllContacts(k.RoutingTable)
 
-			case "LOOKUP":
+			case "FIND_NODE":
 				fmt.Println("Network module sent CH msgs about LOOKUP from: ", msgs.SenderAddr)
 				targetID := NewKademliaID(msgs.TargetID)
 
 				// Perform the lookup
-				closestContacts := k.LookupContact(targetID)
+				closestContacts := k.RoutingTable.FindClosestContacts(targetID, bucketSize)
 
-				// Send back the response via the response channel
-				if msgs.ResponseCh != nil {
-					msgs.ResponseCh <- closestContacts
+				dataMsgs := DataChMsgs{
+					Contacts: closestContacts,
 				}
+				k.dataChannel <- dataMsgs
 
 			default:
 				fmt.Println("Received unknown message type:", msgs.ChCmd)
