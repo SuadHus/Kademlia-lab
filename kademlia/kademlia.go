@@ -75,6 +75,7 @@ func InitKademlia(localAddr string, rootAddr string) *Kademlia {
 
 	go k.Network.Listen("0.0.0.0", 8080)
 	go k.ListenForChMsgs()
+	go k.ListenForCmdMsgs()
 
 	return k
 }
@@ -221,6 +222,30 @@ func (k *Kademlia) ListenForChMsgs() {
 			default:
 				fmt.Println("Received unknown message type:", msgs.KademCmd)
 			}
+		}
+	}()
+}
+
+func (k *Kademlia) ListenForCmdMsgs() {
+	go func() {
+		for msgs := range k.cmdChannel {
+			switch msgs.KademCmd {
+			case "FIND_NODE":
+				fmt.Println("Network module sent CH msgs about LOOKUP from: ", msgs.SenderAddr)
+				targetID := NewKademliaID(msgs.TargetID)
+
+				// Perform the lookup
+				closestContacts := k.RoutingTable.FindClosestContacts(targetID, bucketSize)
+
+				dataMsgs := DataChMsgs{
+					Contacts: closestContacts,
+				}
+				k.dataChannel <- dataMsgs
+
+			default:
+				fmt.Println("Received unknown message type:", msgs.KademCmd)
+			}
+
 		}
 	}()
 }

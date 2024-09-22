@@ -92,6 +92,9 @@ func (network *Network) parseConnection(conn net.Conn) {
 		network.cmdChannel <- CmdChMsgs{
 			KademCmd: "FIND_NODE",
 		}
+		kademliaDataResponse := <-network.dataChannel
+
+		fmt.Println(kademliaDataResponse)
 
 	default:
 		fmt.Println("Received unknown message:", message)

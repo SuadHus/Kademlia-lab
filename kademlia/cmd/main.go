@@ -17,6 +17,7 @@ func main() {
 		id := kademlia.NewKademliaID("FFFFFFFF00000000000000000000000000000000")
 		contact := kademlia.NewContact(id, rootAddr)
 		myKademlia.Network.SendPingMessage(&contact)
+		fmt.Println(myKademlia.Network.SendFindNode(&contact, id))
 	} else {
 		fmt.Println("root node does not init ping")
 	}
