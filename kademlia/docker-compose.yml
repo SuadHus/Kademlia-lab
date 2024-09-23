@@ -21,7 +21,7 @@ services:
     depends_on:
       - root_node
     deploy:
-      replicas: 10
+      replicas: 1
 
 
 networks:
