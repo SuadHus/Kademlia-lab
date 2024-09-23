@@ -54,7 +54,7 @@ func (network *Network) parseConnection(conn net.Conn) {
 		go network.handlePingMessage(conn, message)
 
 	case strings.HasPrefix(message, "PONG"):
-		fmt.Println("Received PONG message:", message)
+		go network.handlePongMessage(conn, message)
 
 	case strings.HasPrefix(message, "BYE"):
 		fmt.Println("Received BYE message:", message)
@@ -83,8 +83,7 @@ func (network *Network) handlePingMessage(conn net.Conn, message string) {
 		return
 	}
 	defer newConn.Close()
-
-	pongMessage := fmt.Sprintf("PONG from %s", newConn.LocalAddr().String())
+	pongMessage := fmt.Sprintf("PONG from %s %s", network.LocalID.String(), network.LocalAddr)
 	_, err = newConn.Write([]byte(pongMessage))
 	if err != nil {
 		fmt.Println("Error sending PONG message:", err)
@@ -92,6 +91,12 @@ func (network *Network) handlePingMessage(conn net.Conn, message string) {
 	}
 
 	fmt.Println("Sent PONG message to", newConn.RemoteAddr().String())
+}
+
+func (network *Network) handlePongMessage(conn net.Conn, message string) {
+	fmt.Println("Received POST message from", message)
+	network.msgChan <- message
+	defer conn.Close()
 }
 
 // SendPingMessage sends a PING message to a given contact

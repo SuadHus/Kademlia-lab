@@ -58,7 +58,7 @@ func (kademlia *Kademlia) listenForMessages() {
 		case msg := <-kademlia.Network.msgChan:
 			// Split the message by spaces to parse it
 			parts := strings.Split(msg, " ")
-			if len(parts) == 4 && parts[0] == "PING" && parts[1] == "from" {
+			if len(parts) == 4 && (parts[0] == "PING" || parts[0] == "PONG") && parts[1] == "from" {
 				// Extract the Kademlia ID and address from the message
 				contactID := NewKademliaID(parts[2]) // The 3rd part is the ID
 				contactAddr := parts[3]              // The 4th part is the Address
@@ -73,6 +73,7 @@ func (kademlia *Kademlia) listenForMessages() {
 			} else {
 				fmt.Println("Invalid message format:", msg)
 			}
+
 		}
 	}
 }
