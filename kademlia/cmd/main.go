@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"kademlia"
 	"os"
+	"time"
 )
 
 func main() {
@@ -17,7 +18,11 @@ func main() {
 		id := kademlia.NewKademliaID("FFFFFFFF00000000000000000000000000000000")
 		contact := kademlia.NewContact(id, rootAddr)
 		myKademlia.Network.SendPingMessage(&contact)
-		fmt.Println(myKademlia.Network.SendFindNode(&contact, id))
+		time.Sleep(1 * time.Second)
+
+		fmt.Println("looking up myself", myKademlia.LookupContact(myKademlia.RoutingTable.Me.ID))
+		//fmt.Println(myKademlia.Network.SendFindNode(&contact, id))
+
 	} else {
 		fmt.Println("root node does not init ping")
 	}

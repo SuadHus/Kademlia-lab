@@ -144,6 +144,8 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 		finalContacts = finalContacts[:k]
 	}
 
+	kademlia.PrintAllContacts(kademlia.RoutingTable)
+
 	return finalContacts
 }
 
@@ -171,36 +173,32 @@ func (k *Kademlia) ListenForChMsgs() {
 			switch msgs.KademCmd {
 
 			case "PING":
-				fmt.Println("Network module sent CH msgs about PING from: ", msgs.SenderAddr)
+				fmt.Println("Network module sent CH msgs about PING from:", msgs.SenderAddr)
 				contact := NewContact(NewKademliaID(msgs.SenderID), msgs.SenderAddr)
 				k.RoutingTable.AddContact(contact)
-				go PrintAllContacts(k.RoutingTable)
-
-				// Send PONG response
-				pongMsg := CmdChMsgs{
-					KademCmd:   "PONG",
-					SenderID:   k.RoutingTable.me.ID.String(),
-					SenderAddr: k.RoutingTable.me.Address,
-				}
-				k.cmdChannel <- pongMsg
+				go k.PrintAllContacts(k.RoutingTable)
 
 			case "PONG":
-				fmt.Println("Network module sent CH msgs about PONG from: ", msgs.SenderAddr)
+				fmt.Println("Received PONG from:", msgs.SenderAddr)
 				contact := NewContact(NewKademliaID(msgs.SenderID), msgs.SenderAddr)
 				k.RoutingTable.AddContact(contact)
-				go PrintAllContacts(k.RoutingTable)
+				go k.PrintAllContacts(k.RoutingTable)
 
 			case "FIND_NODE":
-				fmt.Println("Network module sent CH msgs about LOOKUP from: ", msgs.SenderAddr)
+				fmt.Println("Network module sent CH msgs about FIND_NODE from:", msgs.SenderAddr)
 				targetID := NewKademliaID(msgs.TargetID)
 
 				// Perform the lookup
 				closestContacts := k.RoutingTable.FindClosestContacts(targetID, bucketSize)
 
+				fmt.Println("Closest contacts to target ID:", closestContacts)
+
 				dataMsgs := DataChMsgs{
 					Contacts: closestContacts,
 				}
 				k.dataChannel <- dataMsgs
+
+				go k.PrintAllContacts(k.RoutingTable)
 
 			default:
 				fmt.Println("Received unknown message type:", msgs.KademCmd)
@@ -209,7 +207,7 @@ func (k *Kademlia) ListenForChMsgs() {
 	}()
 }
 
-func PrintAllContacts(rt *RoutingTable) {
+func (k *Kademlia) PrintAllContacts(rt *RoutingTable) {
 	fmt.Println("Contacts in the Routing Table:")
 	for i, bucket := range rt.buckets {
 		if bucket == nil || bucket.Len() == 0 {
