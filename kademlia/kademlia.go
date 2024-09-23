@@ -3,6 +3,7 @@ package kademlia
 import (
 	"fmt"
 	"sort"
+	"time"
 )
 
 const alpha = 3
@@ -42,7 +43,7 @@ type DataChMsgs struct {
 
 }
 
-func InitKademlia(localAddr string, rootAddr string) *Kademlia {
+func NewKademlia(localAddr string, rootAddr string) *Kademlia {
 
 	cmdChannel := make(chan CmdChMsgs)
 	dataChannel := make(chan DataChMsgs)
@@ -77,6 +78,16 @@ func InitKademlia(localAddr string, rootAddr string) *Kademlia {
 	go k.ListenForChMsgs()
 
 	return k
+}
+
+func (kademlia *Kademlia) JoinNetwork(root *Contact, me *Contact) {
+	// Send a PING message to the contact
+	kademlia.Network.SendPingMessage(root)
+
+	time.Sleep(1 * time.Second)
+
+	result := kademlia.LookupContact(me.ID)
+	fmt.Println("JoinNetwork result:", result)
 }
 
 // LookupContact performs an iterative node lookup
