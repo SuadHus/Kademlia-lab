@@ -55,12 +55,14 @@ func (network *Network) parseConnection(conn net.Conn) {
 			return
 		}
 
+		// drop cmd in channel to tell kademlia to do some work
 		network.cmdChannel <- CmdChMsgs{
 			KademCmd:   "PING",
 			SenderAddr: pingOriginAddr,
 			SenderID:   pingOriginID,
 		}
 
+		// read the work form the data channel
 		pongMsgs := <-network.cmdChannel
 
 		if pongMsgs.KademCmd == "PONG" {
@@ -70,9 +72,6 @@ func (network *Network) parseConnection(conn net.Conn) {
 		}
 
 	case strings.HasPrefix(message, "PONG"):
-		fmt.Println("Received NET message:", message)
-		//send back pong
-
 		var pongOriginAddr, pongOriginID string
 
 		_, err := fmt.Sscanf(message, "PONG from %s %s", &pongOriginAddr, &pongOriginID)
@@ -87,13 +86,10 @@ func (network *Network) parseConnection(conn net.Conn) {
 		}
 
 	case strings.HasPrefix(message, "FIND_NODE"):
-		fmt.Println("Parse con, FIND_NODE case")
-
 		network.cmdChannel <- CmdChMsgs{
 			KademCmd: "FIND_NODE",
 		}
 		kademliaDataResponse := <-network.dataChannel
-
 		fmt.Println(kademliaDataResponse)
 
 	default:

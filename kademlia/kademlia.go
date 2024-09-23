@@ -10,35 +10,21 @@ const alpha = 3
 type Kademlia struct {
 	Network      *Network
 	RoutingTable *RoutingTable
-
-	cmdChannel  chan CmdChMsgs
-	dataChannel chan DataChMsgs
-}
-
-// type ChMsgs struct {
-// 	ChCmd      string
-// 	SenderID   string
-// 	SenderAddr string
-// }
-
-type ChMsgs struct {
-	ChCmd      string // Command type ("PING", "PONG", "LOOKUP", etc.)
-	SenderID   string // The ID of the sender node
-	SenderAddr string // The network address of the sender
-	TargetID   string // The target ID (used for LOOKUP or FIND_NODE commands)
+	cmdChannel   chan CmdChMsgs  // channel to pass commands from network module to kademlia
+	dataChannel  chan DataChMsgs // channel to pass async data back from kademlia to network module
 }
 
 type CmdChMsgs struct {
-	KademCmd   string
-	SenderID   string
-	SenderAddr string
-	TargetID   string
+	KademCmd   string // Command for kademlia to execute
+	SenderID   string // sender kademlia ID
+	SenderAddr string // sender IP
+	TargetID   string // target ID for FIND_NODE
 }
 
 type DataChMsgs struct {
-	NetCdm   string
-	Contacts []Contact
-	Data     []byte // Data (used for STORE commands or to carry extra info)
+	NetCmd   string    // command for network, not sure if needed yet
+	Contacts []Contact // contact data
+	Data     []byte    // file data
 
 }
 
@@ -61,8 +47,6 @@ func InitKademlia(localAddr string, rootAddr string) *Kademlia {
 		cmdChannel:  cmdChannel,
 		dataChannel: dataChannel,
 	}
-
-	// go listen for data msgs
 
 	myRoutingTable := NewRoutingTable(me)
 
