@@ -69,7 +69,7 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 	k := bucketSize
 
 	// Initialize the shortlist with k closest contacts
-	closestContacts := kademlia.RoutingTable.FindClosestContacts(targetID, k) // channel fo reading the RT
+	closestContacts := kademlia.RoutingTable.FindClosestContacts(targetID, k)
 	shortlist := make(map[string]Contact)
 	queried := make(map[string]bool)
 
