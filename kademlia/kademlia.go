@@ -25,9 +25,12 @@ type RoutingTableAction struct {
 }
 
 // RoutingTableResponse is a generic response for routing table actions.
+// RoutingTableResponse is a generic response for routing table actions.
 type RoutingTableResponse struct {
-	ClosestContacts []Contact // The closest contacts (for FindClosestContacts)
+    ClosestContacts     []Contact // The closest contacts (for FindClosestContacts)
+    routingTableString  string    // The string representation of the routing table
 }
+
 
 // NewKademlia initializes a new Kademlia instance.
 func NewKademlia(localAddr string) *Kademlia {
@@ -67,14 +70,32 @@ func (kademlia *Kademlia) routingTableWorker() {
 		case "FindClosestContacts":
 			closestContacts := routingTable.FindClosestContacts(action.TargetID, bucketSize)
 			action.ResponseCh <- RoutingTableResponse{ClosestContacts: closestContacts}
+		
+		case "PrintRoutingTable":
+			routingTableString := routingTable.PrintBuckets()
+			action.ResponseCh <- RoutingTableResponse{routingTableString: routingTableString}
+		
 		}
 	}
 }
+
+func (kademlia *Kademlia) PrintRoutingTable() {
+    responseCh := make(chan RoutingTableResponse)
+    kademlia.RoutingTableActionChannel <- RoutingTableAction{
+        ActionType: "PrintRoutingTable",
+        ResponseCh: responseCh,
+    }
+    
+    response := <-responseCh // Receive the response from the channel
+    fmt.Println("frog", response.routingTableString) // Print the routing table string
+}
+
 
 // HandleMessage implements the MessageHandler interface.
 func (kademlia *Kademlia) HandleMessage(message string, senderAddr string) string {
 	switch {
 	case strings.HasPrefix(message, "PING"):
+		kademlia.PrintRoutingTable()
 		return kademlia.handlePingMessage(message, senderAddr)
 	case strings.HasPrefix(message, "PONG"):
 		kademlia.handlePongMessage(message, senderAddr)
@@ -170,6 +191,7 @@ func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr strin
 		contactsStrList = append(contactsStrList, contactStr)
 	}
 	responseMessage := "FIND_NODE_RESPONSE " + strings.Join(contactsStrList, ";")
+	
 	return responseMessage
 }
 
@@ -212,6 +234,8 @@ func (kademlia *Kademlia) handleFindValueMessage(message string, senderAddr stri
 	} else {
 		// Optionally, send a response indicating data not found
 		responseMessage := "VALUE_NOT_FOUND"
+
+		
 		return responseMessage
 	}
 }
@@ -284,10 +308,25 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 		for _, contact := range closestAlpha {
 			queried[contact.ID.String()] = true
 
+			responseCh := make(chan RoutingTableResponse)
+			kademlia.RoutingTableActionChannel <- RoutingTableAction{
+				ActionType: "AddContact",
+				Contact:    &contact,
+				ResponseCh: responseCh,
+			}
+		
+			// Wait for acknowledgment
+			<-responseCh
+
 			// Query the contact
-			closestFromContact := kademlia.SendFindNode(targetID, &contact)
-			for _, c := range closestFromContact {
-				shortlist[c.ID.String()] = c
+			contactsReceived := kademlia.SendFindNode(targetID, &contact)
+			for _, newContact := range contactsReceived {
+				if newContact.ID.Equals(kademlia.Network.LocalID) {
+					continue
+				}
+				if _, exists := shortlist[newContact.ID.String()]; !exists {
+					shortlist[newContact.ID.String()] = newContact
+				}
 			}
 		}
 	}

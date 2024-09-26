@@ -6,6 +6,7 @@ import (
 	"kademlia"
 	//"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -28,7 +29,11 @@ func main() {
 	if contactAddr != "" {
 		contact := kademlia.NewContact(nil, contactAddr)
 		myKademlia.Network.SendPing(&contact)
+		time.Sleep(2 * time.Second)
 		myKademlia.LookupContact(myKademlia.Network.LocalID)
+
+		time.Sleep(2 * time.Second)
+		myKademlia.PrintRoutingTable()
 	} else {
 		fmt.Println("CONTACT_ADDRESS not set in environment")
 	}

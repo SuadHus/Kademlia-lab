@@ -1,5 +1,10 @@
 package kademlia
 
+import (
+	"fmt"
+	"strings"
+)
+
 const bucketSize = 20
 
 // RoutingTable definition
@@ -66,4 +71,34 @@ func (routingTable *RoutingTable) getBucketIndex(id *KademliaID) int {
 	}
 
 	return IDLength*8 - 1
+}
+
+
+// PrintBuckets prints the contacts in all the buckets of the routing table.
+func (routingTable *RoutingTable) PrintBuckets() string {
+    var result strings.Builder
+
+    for i, bucket := range routingTable.buckets {
+        // Skip if the bucket is nil or empty
+        if bucket == nil || bucket.list.Len() == 0 {
+            continue
+        }
+
+        // Print bucket index
+        result.WriteString(fmt.Sprintf("Bucket %d:\n", i))
+
+        // Print all contacts in the bucket
+        for e := bucket.list.Front(); e != nil; e = e.Next() {
+            contact := e.Value.(Contact)
+            result.WriteString(fmt.Sprintf("  ID: %s, Address: %s\n", contact.ID.String(), contact.Address))
+        }
+    }
+
+    // Remove any trailing newline character from the result
+    output := result.String()
+    if len(output) > 0 && output[len(output)-1] == '\n' {
+        output = output[:len(output)-1] // Trim the last newline
+    }
+
+    return output
 }
