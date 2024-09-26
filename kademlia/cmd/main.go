@@ -27,7 +27,9 @@ func main() {
 
 	// Create a contact for the peer node
 	if contactAddr != "" {
-		contact := kademlia.NewContact(nil, contactAddr)
+		id := kademlia.NewKademliaID("FFFFFFFF00000000000000000000000000000000")
+		contact := kademlia.NewContact(id, contactAddr)
+		
 		myKademlia.Network.SendPing(&contact)
 		time.Sleep(2 * time.Second)
 		myKademlia.LookupContact(myKademlia.Network.LocalID)

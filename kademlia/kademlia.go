@@ -35,9 +35,17 @@ type RoutingTableResponse struct {
 
 // NewKademlia initializes a new Kademlia instance.
 func NewKademlia(localAddr string) *Kademlia {
+
 	network := &Network{
 		LocalID:   NewRandomKademliaID(),
 		LocalAddr: localAddr,
+	}
+
+	if localAddr == "172.16.238.10" {
+		network = &Network{
+			LocalID:   NewKademliaID("FFFFFFFF00000000000000000000000000000000"),
+			LocalAddr: localAddr,
+		}
 	}
 
 	// Channel to process routing table actions
@@ -57,6 +65,7 @@ func NewKademlia(localAddr string) *Kademlia {
 
 	return kademlia
 }
+
 
 // routingTableWorker processes routing table actions sequentially.
 func (kademlia *Kademlia) routingTableWorker() {
