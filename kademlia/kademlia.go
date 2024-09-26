@@ -67,6 +67,16 @@ func NewKademlia(localAddr string) *Kademlia {
 }
 
 
+func (kademlia *Kademlia) JoinNetwork(root *Contact) {
+	// Send a PING message to the contact
+	kademlia.Network.SendPing(root)
+
+	time.Sleep(1 * time.Second)
+
+	kademlia.LookupContact(kademlia.Network.LocalID)
+}
+
+
 // routingTableWorker processes routing table actions sequentially.
 func (kademlia *Kademlia) routingTableWorker() {
 	routingTable := NewRoutingTable(NewContact(kademlia.Network.LocalID, kademlia.Network.LocalAddr))
@@ -324,9 +334,6 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 
 				defer wg.Done()
 				contactsReceived := kademlia.SendFindNode(targetID, &contact)
-
-				time.Sleep(3 * time.Second)
-				fmt.Println("PARALLELLT PLS")
 
 				resultsChannel <- contactsReceived
 
