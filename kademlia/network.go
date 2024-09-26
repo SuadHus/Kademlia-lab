@@ -1,7 +1,7 @@
 package kademlia
 
 import (
-	"encoding/base64"
+	//"encoding/base64"
 	"fmt"
 	"net"
 	"strings"
@@ -150,40 +150,40 @@ func (network *Network) SendFindNode(contact *Contact, targetID *KademliaID) ([]
 	}
 }
 
-func (network *Network) SendStore(contact *Contact, hash string, data []byte) error {
-	dataBase64 := base64.StdEncoding.EncodeToString(data)
-	message := fmt.Sprintf("STORE %s %s", hash, dataBase64)
-	response, err := network.SendMessage(contact.Address, message)
-	if err != nil {
-		fmt.Println("Error sending STORE message:", err)
-		return err
-	}
-	if response != "STORE_OK" {
-		fmt.Println("Error response from STORE:", response)
-		return fmt.Errorf("Store failed: %s", response)
-	}
-	return nil
-}
+// func (network *Network) SendStore(contact *Contact, hash string, data []byte) error {
+// 	dataBase64 := base64.StdEncoding.EncodeToString(data)
+// 	message := fmt.Sprintf("STORE %s %s", hash, dataBase64)
+// 	response, err := network.SendMessage(contact.Address, message)
+// 	if err != nil {
+// 		fmt.Println("Error sending STORE message:", err)
+// 		return err
+// 	}
+// 	if response != "STORE_OK" {
+// 		fmt.Println("Error response from STORE:", response)
+// 		return fmt.Errorf("Store failed: %s", response)
+// 	}
+// 	return nil
+// }
 
-// SendFindValue sends a FIND_VALUE message to a contact
-func (network *Network) SendFindValue(contact *Contact, hash string) ([]byte, error) {
-	message := fmt.Sprintf("FIND_VALUE %s", hash)
-	response, err := network.SendMessage(contact.Address, message)
-	if err != nil {
-		fmt.Println("Error sending FIND_VALUE message:", err)
-		return nil, err
-	}
+// // SendFindValue sends a FIND_VALUE message to a contact
+// func (network *Network) SendFindValue(contact *Contact, hash string) ([]byte, error) {
+// 	message := fmt.Sprintf("FIND_VALUE %s", hash)
+// 	response, err := network.SendMessage(contact.Address, message)
+// 	if err != nil {
+// 		fmt.Println("Error sending FIND_VALUE message:", err)
+// 		return nil, err
+// 	}
 
-	if strings.HasPrefix(response, "VALUE") {
-		dataBase64 := strings.TrimPrefix(response, "VALUE ")
-		data, err := base64.StdEncoding.DecodeString(dataBase64)
-		if err != nil {
-			fmt.Println("Error decoding data:", err)
-			return nil, err
-		}
-		return data, nil
-	} else {
-		// Handle other responses
-		return nil, fmt.Errorf("Invalid FIND_VALUE response")
-	}
-}
+// 	if strings.HasPrefix(response, "VALUE") {
+// 		dataBase64 := strings.TrimPrefix(response, "VALUE ")
+// 		data, err := base64.StdEncoding.DecodeString(dataBase64)
+// 		if err != nil {
+// 			fmt.Println("Error decoding data:", err)
+// 			return nil, err
+// 		}
+// 		return data, nil
+// 	} else {
+// 		// Handle other responses
+// 		return nil, fmt.Errorf("Invalid FIND_VALUE response")
+// 	}
+// }

@@ -11,26 +11,42 @@ import (
 
 // Kademlia represents the Kademlia distributed hash table.
 type Kademlia struct {
-	Network      *Network
-	RoutingTable *RoutingTable
-	DataStore    map[string][]byte
+	Network                   *Network
+	RoutingTableActionChannel chan RoutingTableAction // The channel to handle routing table actions
+	DataStore                 map[string][]byte
+}
+
+// RoutingTableAction represents an action that needs to be performed on the RoutingTable.
+type RoutingTableAction struct {
+	ActionType  string        // Type of action (e.g., "AddContact", "FindClosestContacts")
+	Contact     *Contact      // Contact to add (for AddContact)
+	TargetID    *KademliaID   // TargetID (for FindClosestContacts)
+	ResponseCh  chan RoutingTableResponse // Channel to send the response back to the caller
+}
+
+// RoutingTableResponse is a generic response for routing table actions.
+type RoutingTableResponse struct {
+	ClosestContacts []Contact // The closest contacts (for FindClosestContacts)
 }
 
 // NewKademlia initializes a new Kademlia instance.
 func NewKademlia(localAddr string) *Kademlia {
-
 	network := &Network{
 		LocalID:   NewRandomKademliaID(),
 		LocalAddr: localAddr,
 	}
 
-	routingTable := NewRoutingTable(NewContact(network.LocalID, localAddr))
+	// Channel to process routing table actions
+	routingTableActionChannel := make(chan RoutingTableAction)
 
 	kademlia := &Kademlia{
-		Network:      network,
-		RoutingTable: routingTable,
-		DataStore:    make(map[string][]byte),
+		Network:                   network,
+		RoutingTableActionChannel: routingTableActionChannel,
+		DataStore:                 make(map[string][]byte),
 	}
+
+	// Start the routing table worker
+	go kademlia.routingTableWorker()
 
 	// Set the network's message handler to this Kademlia instance
 	network.handler = kademlia
@@ -38,7 +54,24 @@ func NewKademlia(localAddr string) *Kademlia {
 	return kademlia
 }
 
-// HandleMessage implements the MessageHandler interface
+// routingTableWorker processes routing table actions sequentially.
+func (kademlia *Kademlia) routingTableWorker() {
+	routingTable := NewRoutingTable(NewContact(kademlia.Network.LocalID, kademlia.Network.LocalAddr))
+
+	for action := range kademlia.RoutingTableActionChannel {
+		switch action.ActionType {
+		case "AddContact":
+			routingTable.AddContact(*action.Contact)
+			action.ResponseCh <- RoutingTableResponse{} // Send an empty response to acknowledge completion
+
+		case "FindClosestContacts":
+			closestContacts := routingTable.FindClosestContacts(action.TargetID, bucketSize)
+			action.ResponseCh <- RoutingTableResponse{ClosestContacts: closestContacts}
+		}
+	}
+}
+
+// HandleMessage implements the MessageHandler interface.
 func (kademlia *Kademlia) HandleMessage(message string, senderAddr string) string {
 	switch {
 	case strings.HasPrefix(message, "PING"):
@@ -60,7 +93,6 @@ func (kademlia *Kademlia) HandleMessage(message string, senderAddr string) strin
 
 func (kademlia *Kademlia) handlePingMessage(message string, senderAddr string) string {
 	fmt.Println("Received PING message from", senderAddr)
-	// Extract sender's ID from the message
 	parts := strings.Split(message, " ")
 	if len(parts) < 2 {
 		fmt.Println("Invalid PING message format")
@@ -69,7 +101,17 @@ func (kademlia *Kademlia) handlePingMessage(message string, senderAddr string) s
 	senderIDStr := parts[1]
 	senderID := NewKademliaID(senderIDStr)
 	senderContact := NewContact(senderID, senderAddr)
-	kademlia.RoutingTable.AddContact(senderContact)
+
+	// Create a response channel for this request
+	responseCh := make(chan RoutingTableResponse)
+	kademlia.RoutingTableActionChannel <- RoutingTableAction{
+		ActionType: "AddContact",
+		Contact:    &senderContact,
+		ResponseCh: responseCh,
+	}
+
+	// Wait for acknowledgment
+	<-responseCh
 
 	// Prepare PONG response including our own ID
 	response := fmt.Sprintf("PONG %s", kademlia.Network.LocalID.String())
@@ -78,7 +120,6 @@ func (kademlia *Kademlia) handlePingMessage(message string, senderAddr string) s
 
 func (kademlia *Kademlia) handlePongMessage(message string, senderAddr string) {
 	fmt.Println("Received PONG message from", senderAddr)
-	// Extract sender's ID from the message
 	parts := strings.Split(message, " ")
 	if len(parts) < 2 {
 		fmt.Println("Invalid PONG message format")
@@ -87,7 +128,17 @@ func (kademlia *Kademlia) handlePongMessage(message string, senderAddr string) {
 	senderIDStr := parts[1]
 	senderID := NewKademliaID(senderIDStr)
 	senderContact := NewContact(senderID, senderAddr)
-	kademlia.RoutingTable.AddContact(senderContact)
+
+	// Create a response channel for this request
+	responseCh := make(chan RoutingTableResponse)
+	kademlia.RoutingTableActionChannel <- RoutingTableAction{
+		ActionType: "AddContact",
+		Contact:    &senderContact,
+		ResponseCh: responseCh,
+	}
+
+	// Wait for acknowledgment
+	<-responseCh
 }
 
 func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr string) string {
@@ -100,8 +151,17 @@ func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr strin
 	targetIDStr := parts[1]
 	targetID := NewKademliaID(targetIDStr)
 
-	// Find closest contacts
-	closestContacts := kademlia.RoutingTable.FindClosestContacts(targetID, bucketSize)
+	// Create a response channel for this request
+	responseCh := make(chan RoutingTableResponse)
+	kademlia.RoutingTableActionChannel <- RoutingTableAction{
+		ActionType: "FindClosestContacts",
+		TargetID:   targetID,
+		ResponseCh: responseCh,
+	}
+
+	// Wait for the result
+	response := <-responseCh
+	closestContacts := response.ClosestContacts
 
 	// Prepare response
 	var contactsStrList []string
@@ -180,7 +240,15 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 	k := bucketSize
 
 	// Initialize the shortlist with k closest contacts
-	closestContacts := kademlia.RoutingTable.FindClosestContacts(targetID, k)
+	responseCh := make(chan RoutingTableResponse)
+	kademlia.RoutingTableActionChannel <- RoutingTableAction{
+		ActionType: "FindClosestContacts",
+		TargetID:   targetID,
+		ResponseCh: responseCh,
+	}
+	response := <-responseCh
+	closestContacts := response.ClosestContacts
+
 	shortlist := make(map[string]Contact)
 	queried := make(map[string]bool)
 
@@ -203,108 +271,46 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 
 		// Sort unqueriedContacts by distance to target
 		sort.Slice(unqueriedContacts, func(i, j int) bool {
-			distI := unqueriedContacts[i].ID.CalcDistance(targetID)
-			distJ := unqueriedContacts[j].ID.CalcDistance(targetID)
-			return distI.Less(distJ)
+			return unqueriedContacts[i].ID.CalcDistance(targetID).Less(unqueriedContacts[j].ID.CalcDistance(targetID))
 		})
 
-		// Select up to α contacts to query
-		numToQuery := alpha
-		if len(unqueriedContacts) < alpha {
-			numToQuery = len(unqueriedContacts)
+		// Select α closest contacts to query
+		closestAlpha := unqueriedContacts
+		if len(unqueriedContacts) > alpha {
+			closestAlpha = unqueriedContacts[:alpha]
 		}
-		contactsToQuery := unqueriedContacts[:numToQuery]
 
-		// For each contact to query
-		for _, contact := range contactsToQuery {
+		// Query the selected contacts in parallel
+		for _, contact := range closestAlpha {
 			queried[contact.ID.String()] = true
 
-			// Send FIND_NODE to the contact
-			contactsReceived := kademlia.SendFindNode(targetID, &contact)
-
-			// Add the contact to the routing table
-			kademlia.RoutingTable.AddContact(contact)
-
-			// Add any new contacts received to the shortlist
-			for _, newContact := range contactsReceived {
-				if newContact.ID.Equals(kademlia.Network.LocalID) {
-					continue
-				}
-				if _, exists := shortlist[newContact.ID.String()]; !exists {
-					shortlist[newContact.ID.String()] = newContact
-				}
+			// Query the contact
+			closestFromContact := kademlia.SendFindNode(targetID, &contact)
+			for _, c := range closestFromContact {
+				shortlist[c.ID.String()] = c
 			}
 		}
 	}
 
-	// Convert shortlist to a slice and sort
-	var finalContacts []Contact
+	// Return the k closest contacts
+	var finalClosest []Contact
 	for _, contact := range shortlist {
-		finalContacts = append(finalContacts, contact)
+		finalClosest = append(finalClosest, contact)
 	}
 
-	// Sort the finalContacts by distance to target
-	sort.Slice(finalContacts, func(i, j int) bool {
-		distI := finalContacts[i].ID.CalcDistance(targetID)
-		distJ := finalContacts[j].ID.CalcDistance(targetID)
-		return distI.Less(distJ)
+	sort.Slice(finalClosest, func(i, j int) bool {
+		return finalClosest[i].ID.CalcDistance(targetID).Less(finalClosest[j].ID.CalcDistance(targetID))
 	})
 
-	// Return the k closest contacts
-	if len(finalContacts) > k {
-		finalContacts = finalContacts[:k]
+	if len(finalClosest) > k {
+		finalClosest = finalClosest[:k]
 	}
 
-	return finalContacts
+	return finalClosest
 }
 
-// Store stores data in the network
-func (kademlia *Kademlia) Store(data []byte) string {
-	// Compute the hash of the data
+// HashData computes the SHA1 hash of the given data.
+func (kademlia *Kademlia) HashData(data []byte) string {
 	hash := sha1.Sum(data)
-	hashString := hex.EncodeToString(hash[:])
-	fmt.Println("Storing data with hash:", hashString)
-
-	// Find the k closest nodes to the hash
-	targetID := NewKademliaID(hashString)
-	closestContacts := kademlia.LookupContact(targetID)
-	fmt.Println("Closest contacts to hash:", closestContacts)
-
-	// Send STORE messages to each contact
-	for _, contact := range closestContacts {
-		kademlia.Network.SendStore(&contact, hashString, data)
-	}
-
-	// Optionally store the data locally if this node is among the closest
-	for _, contact := range closestContacts {
-		if contact.ID.Equals(kademlia.Network.LocalID) {
-			kademlia.DataStore[hashString] = data
-			break
-		}
-	}
-
-	return hashString
-}
-
-// LookupData retrieves data from the network
-func (kademlia *Kademlia) LookupData(hash string) ([]byte, error) {
-	// Check local datastore
-	if data, found := kademlia.DataStore[hash]; found {
-		return data, nil
-	}
-
-	// Perform iterative lookup
-	targetID := NewKademliaID(hash)
-	closestContacts := kademlia.LookupContact(targetID)
-
-	for _, contact := range closestContacts {
-		data, err := kademlia.Network.SendFindValue(&contact, hash)
-		if err == nil && data != nil {
-			// Store data locally
-			kademlia.DataStore[hash] = data
-			return data, nil
-		}
-	}
-
-	return nil, fmt.Errorf("Data not found for hash: %s", hash)
+	return hex.EncodeToString(hash[:])
 }
