@@ -15,6 +15,7 @@ import (
 type Kademlia struct {
 	Network                   *Network
 	RoutingTableActionChannel chan RoutingTableAction // The channel to handle routing table actions
+	DataStoreActionChannel    chan DataStoreAction    // The channel to handle data store actions
 	DataStore                 map[string][]byte
 }
 
@@ -31,6 +32,20 @@ type RoutingTableAction struct {
 type RoutingTableResponse struct {
 	ClosestContacts    []Contact // The closest contacts (for FindClosestContacts)
 	routingTableString string    // The string representation of the routing table
+}
+
+// DataStoreAction represents an action to be performed on the DataStore.
+type DataStoreAction struct {
+	ActionType string                 // "Store" or "Retrieve"
+	Key        string                 // The key (hash) for the data
+	Value      []byte                 // The data to store (for "Store" action)
+	ResponseCh chan DataStoreResponse // Channel to send the response
+}
+
+// DataStoreResponse represents the response from a DataStore action.
+type DataStoreResponse struct {
+	Value   []byte // The data retrieved (for "Retrieve" action)
+	Success bool   // Indicates if the action was successful
 }
 
 // NewKademlia initializes a new Kademlia instance.
@@ -51,11 +66,15 @@ func NewKademlia(localAddr string) *Kademlia {
 	// Channel to process routing table actions
 	routingTableActionChannel := make(chan RoutingTableAction)
 
+	dataStoreActionChannel := make(chan DataStoreAction)
+
 	kademlia := &Kademlia{
 		Network:                   network,
 		RoutingTableActionChannel: routingTableActionChannel,
-		DataStore:                 make(map[string][]byte),
+		DataStoreActionChannel:    dataStoreActionChannel,
 	}
+
+	go kademlia.dataStoreWorker()
 
 	// Start the routing table worker
 	go kademlia.routingTableWorker()
@@ -66,7 +85,6 @@ func NewKademlia(localAddr string) *Kademlia {
 	return kademlia
 }
 
-
 func (kademlia *Kademlia) JoinNetwork(root *Contact) {
 	// Send a PING message to the contact
 	kademlia.Network.SendPing(root)
@@ -75,7 +93,6 @@ func (kademlia *Kademlia) JoinNetwork(root *Contact) {
 
 	kademlia.LookupContact(kademlia.Network.LocalID)
 }
-
 
 // routingTableWorker processes routing table actions sequentially.
 func (kademlia *Kademlia) routingTableWorker() {
@@ -95,6 +112,22 @@ func (kademlia *Kademlia) routingTableWorker() {
 			routingTableString := routingTable.PrintBuckets()
 			action.ResponseCh <- RoutingTableResponse{routingTableString: routingTableString}
 
+		}
+	}
+}
+
+// dataStoreWorker processes data store actions sequentially.
+func (kademlia *Kademlia) dataStoreWorker() {
+	dataStore := make(map[string][]byte)
+
+	for action := range kademlia.DataStoreActionChannel {
+		switch action.ActionType {
+		case "Store":
+			dataStore[action.Key] = action.Value
+			action.ResponseCh <- DataStoreResponse{Success: true}
+		case "Retrieve":
+			value, found := dataStore[action.Key]
+			action.ResponseCh <- DataStoreResponse{Value: value, Success: found}
 		}
 	}
 }
@@ -212,50 +245,6 @@ func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr strin
 	responseMessage := "FIND_NODE_RESPONSE " + strings.Join(contactsStrList, ";")
 
 	return responseMessage
-}
-
-func (kademlia *Kademlia) handleStoreMessage(message string, senderAddr string) string {
-	fmt.Println("Received STORE message from", senderAddr)
-
-	parts := strings.SplitN(message, " ", 3)
-	if len(parts) < 3 {
-		fmt.Println("Invalid STORE message format")
-		return "STORE_ERROR Invalid format"
-	}
-	hash := parts[1]
-	dataBase64 := parts[2]
-	data, err := base64.StdEncoding.DecodeString(dataBase64)
-	if err != nil {
-		fmt.Println("Error decoding data:", err)
-		return "STORE_ERROR Decoding error"
-	}
-
-	kademlia.DataStore[hash] = data
-	fmt.Println("Stored data with hash:", hash)
-
-	// Return acknowledgment
-	return "STORE_OK"
-}
-
-func (kademlia *Kademlia) handleFindValueMessage(message string, senderAddr string) string {
-	fmt.Println("Received FIND_VALUE message from", senderAddr)
-
-	parts := strings.Split(message, " ")
-	if len(parts) < 2 {
-		fmt.Println("Invalid FIND_VALUE message format")
-		return ""
-	}
-	hash := parts[1]
-
-	if data, found := kademlia.DataStore[hash]; found {
-		responseMessage := fmt.Sprintf("VALUE %s", base64.StdEncoding.EncodeToString(data))
-		return responseMessage
-	} else {
-		// Optionally, send a response indicating data not found
-		responseMessage := "VALUE_NOT_FOUND"
-
-		return responseMessage
-	}
 }
 
 // Ping a contact
@@ -380,8 +369,146 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 	return finalClosest
 }
 
+// STORE LOGIC
+
+// SendStore sends a STORE message to the given contact to store the data.
+func (kademlia *Kademlia) SendStore(contact Contact, key string, data []byte) error {
+	return kademlia.Network.SendStore(&contact, key, data)
+}
+
+// StoreData stores the given data in the network according to Kademlia protocol.
+func (kademlia *Kademlia) StoreData(data []byte) error {
+	// Step 1: Hash the data to obtain the key
+	key := kademlia.HashData(data)
+	targetID := NewKademliaID(key)
+
+	// Step 2: Perform a node lookup for the key
+	closestContacts := kademlia.LookupContact(targetID)
+
+	if len(closestContacts) == 0 {
+		return fmt.Errorf("no contacts found to store the data")
+	}
+
+	// Step 3: Send STORE messages to the k closest nodes
+	var wg sync.WaitGroup
+	for _, contact := range closestContacts {
+		wg.Add(1)
+		go func(contact Contact) {
+			defer wg.Done()
+			err := kademlia.SendStore(contact, key, data)
+			if err != nil {
+				fmt.Printf("Error storing data on %s: %v\n", contact.Address, err)
+			}
+		}(contact)
+	}
+
+	// Wait for all STORE RPCs to complete
+	wg.Wait()
+	return nil
+}
+
+// RetrieveData retrieves data associated with the given key from the network.
+func (kademlia *Kademlia) RetrieveData(key string) ([]byte, error) {
+	targetID := NewKademliaID(key)
+
+	// Step 1: Perform a node lookup for the key
+	closestContacts := kademlia.LookupContact(targetID)
+
+	if len(closestContacts) == 0 {
+		return nil, fmt.Errorf("no contacts found to retrieve the data")
+	}
+
+	// Step 2: Send FIND_VALUE messages to the closest contacts
+	for _, contact := range closestContacts {
+		data, found, err := kademlia.SendFindValue(contact, key)
+		if err != nil {
+			fmt.Printf("Error retrieving data from %s: %v\n", contact.Address, err)
+			continue
+		}
+		if found {
+			return data, nil
+		}
+	}
+
+	// If data not found, return an error
+	return nil, fmt.Errorf("data not found in the network")
+}
+
+// SendFindValue sends a FIND_VALUE message to the given contact.
+func (kademlia *Kademlia) SendFindValue(contact Contact, key string) ([]byte, bool, error) {
+	data, found, err := kademlia.Network.SendFindValue(&contact, key)
+	if err != nil {
+		return nil, false, err
+	}
+	return data, found, nil
+}
+
 // HashData computes the SHA1 hash of the given data.
 func (kademlia *Kademlia) HashData(data []byte) string {
 	hash := sha1.Sum(data)
 	return hex.EncodeToString(hash[:])
+}
+
+func (kademlia *Kademlia) handleStoreMessage(message string, senderAddr string) string {
+	fmt.Println("Received STORE message from", senderAddr)
+
+	parts := strings.SplitN(message, " ", 3)
+	if len(parts) < 3 {
+		fmt.Println("Invalid STORE message format")
+		return "STORE_ERROR Invalid format"
+	}
+	hash := parts[1]
+	dataBase64 := parts[2]
+	data, err := base64.StdEncoding.DecodeString(dataBase64)
+	if err != nil {
+		fmt.Println("Error decoding data:", err)
+		return "STORE_ERROR Decoding error"
+	}
+
+	// Use DataStoreActionChannel to store data
+	responseCh := make(chan DataStoreResponse)
+	kademlia.DataStoreActionChannel <- DataStoreAction{
+		ActionType: "Store",
+		Key:        hash,
+		Value:      data,
+		ResponseCh: responseCh,
+	}
+
+	// Wait for the response
+	response := <-responseCh
+	if response.Success {
+		fmt.Println("Stored data with hash:", hash)
+		return "STORE_OK"
+	} else {
+		return "STORE_ERROR Failed to store data"
+	}
+}
+
+func (kademlia *Kademlia) handleFindValueMessage(message string, senderAddr string) string {
+	fmt.Println("Received FIND_VALUE message from", senderAddr)
+
+	parts := strings.Split(message, " ")
+	if len(parts) < 2 {
+		fmt.Println("Invalid FIND_VALUE message format")
+		return ""
+	}
+	hash := parts[1]
+
+	// Use DataStoreActionChannel to retrieve data
+	responseCh := make(chan DataStoreResponse)
+	kademlia.DataStoreActionChannel <- DataStoreAction{
+		ActionType: "Retrieve",
+		Key:        hash,
+		ResponseCh: responseCh,
+	}
+
+	// Wait for the response
+	response := <-responseCh
+	if response.Success {
+		responseMessage := fmt.Sprintf("VALUE %s", base64.StdEncoding.EncodeToString(response.Value))
+		return responseMessage
+	} else {
+		responseMessage := "VALUE_NOT_FOUND"
+		return responseMessage
+	}
 }
