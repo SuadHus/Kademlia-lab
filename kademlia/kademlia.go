@@ -57,39 +57,27 @@ func NewKademlia(localAddr string) *Kademlia {
 		LocalAddr: localAddr,
 	}
 
-	cli := &NodeCli{}
-
-	if localAddr == "172.16.238.10" {
-		network = &Network{
-			LocalID:   NewKademliaID("FFFFFFFF00000000000000000000000000000000"),
-			LocalAddr: localAddr,
-		}
-	}
-
-	// Channel to process routing table actions
-	routingTableActionChannel := make(chan RoutingTableAction)
-
-	dataStoreActionChannel := make(chan DataStoreAction)
-
 	kademlia := &Kademlia{
 		Network:                   network,
-		RoutingTableActionChannel: routingTableActionChannel,
-		DataStoreActionChannel:    dataStoreActionChannel,
-		NodeCli:                   cli,
+		RoutingTableActionChannel: make(chan RoutingTableAction),
+		DataStoreActionChannel:    make(chan DataStoreAction),
 	}
 
+	cli := &NodeCli{
+		nodeCli: kademlia,  // Set the Kademlia instance as the CLI handler
+	}
+
+	kademlia.NodeCli = cli
+
 	go cli.StartCLI()
-
 	go kademlia.dataStoreWorker()
-
-	// Start the routing table worker
 	go kademlia.routingTableWorker()
 
-	// Set the network's message handler to this Kademlia instance
 	network.handler = kademlia
 
 	return kademlia
 }
+
 
 func (kademlia *Kademlia) JoinNetwork(root *Contact) {
 	// Send a PING message to the contact
