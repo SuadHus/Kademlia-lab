@@ -82,7 +82,7 @@ func (network *Network) parseConnection(conn net.Conn) {
 	}
 }
 
-// SendMessage sends a message to a given address and waits for a response
+// send a network messages with command
 func (network *Network) SendMessage(address string, message string) (string, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
@@ -104,7 +104,6 @@ func (network *Network) SendMessage(address string, message string) (string, err
 	return response, nil
 }
 
-// SendPing sends a PING message to a given contact
 func (network *Network) SendPing(contact *Contact) error {
 	message := fmt.Sprintf("PING %s", network.LocalID.String())
 	response, err := network.SendMessage(contact.Address, message)
@@ -119,7 +118,6 @@ func (network *Network) SendPing(contact *Contact) error {
 	return nil
 }
 
-// SendFindNode sends a FIND_NODE message to a given contact
 func (network *Network) SendFindNode(contact *Contact, targetID *KademliaID) ([]Contact, error) {
 	message := fmt.Sprintf("FIND_NODE %s", targetID.String())
 	response, err := network.SendMessage(contact.Address, message)
@@ -166,8 +164,6 @@ func (network *Network) SendStore(contact *Contact, hash string, data []byte) er
 	return nil
 }
 
-// SendFindValue sends a FIND_VALUE message to a contact
-// SendFindValue sends a FIND_VALUE message to the given contact.
 func (network *Network) SendFindValue(contact *Contact, key string) ([]byte, bool, error) {
 	message := fmt.Sprintf("FIND_VALUE %s", key)
 

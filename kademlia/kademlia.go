@@ -17,6 +17,7 @@ type Kademlia struct {
 	RoutingTableActionChannel chan RoutingTableAction // The channel to handle routing table actions
 	DataStoreActionChannel    chan DataStoreAction    // The channel to handle data store actions
 	DataStore                 map[string][]byte
+	NodeCli                   *NodeCli
 }
 
 // RoutingTableAction represents an action that needs to be performed on the RoutingTable.
@@ -56,6 +57,8 @@ func NewKademlia(localAddr string) *Kademlia {
 		LocalAddr: localAddr,
 	}
 
+	cli := &NodeCli{}
+
 	if localAddr == "172.16.238.10" {
 		network = &Network{
 			LocalID:   NewKademliaID("FFFFFFFF00000000000000000000000000000000"),
@@ -72,7 +75,10 @@ func NewKademlia(localAddr string) *Kademlia {
 		Network:                   network,
 		RoutingTableActionChannel: routingTableActionChannel,
 		DataStoreActionChannel:    dataStoreActionChannel,
+		NodeCli:                   cli,
 	}
+
+	go cli.StartCLI()
 
 	go kademlia.dataStoreWorker()
 
@@ -161,6 +167,37 @@ func (kademlia *Kademlia) HandleMessage(message string, senderAddr string) strin
 	default:
 		fmt.Println("Received unknown message:", message)
 		return ""
+	}
+}
+
+func (kademlia *Kademlia) HandleCliMessage(message string, senderAddr string) string {
+	parts := strings.Split(message, " ")
+	switch parts[0] {
+	case "put":
+		if len(parts) < 2 {
+			return "Usage: put <file_content (strings for now)>"
+		}
+		content := parts[1]
+		err := kademlia.StoreData([]byte(content))
+		if err != nil {
+			return fmt.Sprintf("Error storing data: %v", err)
+		}
+		hash := kademlia.HashData([]byte(content))
+		return fmt.Sprintf("Data stored with hash: %s", hash)
+	case "get":
+		if len(parts) < 2 {
+			return "Usage: get <hash>"
+		}
+		hash := parts[1]
+		data, err := kademlia.RetrieveData(hash)
+		if err != nil {
+			return fmt.Sprintf("Error retrieving data: %v", err)
+		}
+		return fmt.Sprintf("Data retrieved: %s", string(data))
+	case "exit":
+		return "Exiting CLI..."
+	default:
+		return "Unknown command"
 	}
 }
 

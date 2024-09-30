@@ -8,6 +8,8 @@ services:
         ipv4_address: 172.16.238.10  # Static IP for the root node
     ports:
       - "8080:8080"  # Expose root node's port to host for debugging purposes
+    stdin_open: true  # Keep stdin open
+    tty: true         # Allocate a pseudo-TTY
 
   kademlia_node:
     image: kademlia-app
@@ -19,6 +21,8 @@ services:
       - kademlia_network
     deploy:
       replicas: 5
+    stdin_open: true  # Keep stdin open
+    tty: true         # Allocate a pseudo-TTY
 
 
 networks:
