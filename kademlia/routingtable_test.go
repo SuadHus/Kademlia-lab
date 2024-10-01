@@ -1,30 +1,61 @@
 package kademlia
 
 import (
-	"fmt"
 	"testing"
 )
 
-// FIXME: This test doesn't actually test anything. There is only one assertion
-// that is included as an example.
+func TestRoutingTable_AddContact(t *testing.T) {
+	me := NewContact(NewRandomKademliaID(), "localhost:8000")
+	rt := NewRoutingTable(me)
+	contact := NewContact(NewRandomKademliaID(), "localhost:8001")
+	rt.AddContact(contact)
 
-func TestRoutingTable(t *testing.T) {
-	rt := NewRoutingTable(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "localhost:8000"))
+	// Verify that the contact is in the appropriate bucket
+	bucketIndex := rt.getBucketIndex(contact.ID)
+	bucket := rt.buckets[bucketIndex]
+	if bucket.Len() == 0 {
+		t.Error("Bucket should contain the contact")
+	}
+}
 
-	rt.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "localhost:8001"))
-	rt.AddContact(NewContact(NewKademliaID("1111111100000000000000000000000000000000"), "localhost:8002"))
-	rt.AddContact(NewContact(NewKademliaID("1111111200000000000000000000000000000000"), "localhost:8002"))
-	rt.AddContact(NewContact(NewKademliaID("1111111300000000000000000000000000000000"), "localhost:8002"))
-	rt.AddContact(NewContact(NewKademliaID("1111111400000000000000000000000000000000"), "localhost:8002"))
-	rt.AddContact(NewContact(NewKademliaID("2111111400000000000000000000000000000000"), "localhost:8002"))
+func TestRoutingTable_FindClosestContacts(t *testing.T) {
+	me := NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "localhost:8000")
+	rt := NewRoutingTable(me)
 
-	contacts := rt.FindClosestContacts(NewKademliaID("2111111400000000000000000000000000000000"), 20)
-	for i := range contacts {
-		fmt.Println(contacts[i].String())
+	contactsToAdd := []Contact{
+		NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "localhost:8001"),
+		NewContact(NewKademliaID("1111111100000000000000000000000000000000"), "localhost:8002"),
+		NewContact(NewKademliaID("1111111200000000000000000000000000000000"), "localhost:8003"),
+		NewContact(NewKademliaID("1111111300000000000000000000000000000000"), "localhost:8004"),
+		NewContact(NewKademliaID("1111111400000000000000000000000000000000"), "localhost:8005"),
+		NewContact(NewKademliaID("2111111400000000000000000000000000000000"), "localhost:8006"),
 	}
 
-	// TODO: This is just an example. Make more meaningful assertions.
-	if len(contacts) != 6 {
-		t.Fatalf("Expected 6 contacts but instead got %d", len(contacts))
+	for _, contact := range contactsToAdd {
+		rt.AddContact(contact)
 	}
+
+	targetID := NewKademliaID("2111111400000000000000000000000000000000")
+	contacts := rt.FindClosestContacts(targetID, 20)
+
+	if len(contacts) != len(contactsToAdd) {
+		t.Errorf("Expected %d contacts but got %d", len(contactsToAdd), len(contacts))
+	}
+
+	// Verify that contacts are sorted by distance
+	for i := 1; i < len(contacts); i++ {
+		if contacts[i-1].distance.Greater(contacts[i].distance) {
+			t.Error("Contacts are not sorted by distance")
+		}
+	}
+}
+
+// You need to add Greater method to KademliaID
+func (kademliaID *KademliaID) Greater(other *KademliaID) bool {
+	for i := 0; i < IDLength; i++ {
+		if kademliaID[i] != other[i] {
+			return kademliaID[i] > other[i]
+		}
+	}
+	return false
 }
