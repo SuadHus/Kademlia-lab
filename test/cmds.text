@@ -1,0 +1,35 @@
+--- COMMANDS FOR DOCKER ---
+
+BUILD DOCKER IMAGE
+> docker build -f Dockerfile . -t kademlia-app
+
+COMPILE IMAGE
+> docker run --rm [name of image]
+
+REMOVE DAGELING IMAGES
+> docker image prune -f
+
+LIST ALL PROCESSES
+> docker-compose ps
+
+LAUNCH A NETWORK WITH THE 50 NODES
+> docker-compose 
+OR
+> docker-compose up -d
+OR
+> docker-compose --build
+
+CONNECT TO A CONTAINER ON A RUNNING NETWORK
+> docker exec -it [container-name] /bin/sh
+
+LIST DOCKER NETWORKS 
+> docker network ls
+
+INSPECT A NETWORK
+> docker network inspect [network name]
+
+SHUT DOWN COMPOSE
+> docker-compose down
+
+FORCE CONTAINER TO STAY ALIVE
+> docker run -d --entrypoint tail kademlia-app:latest -f /dev/null

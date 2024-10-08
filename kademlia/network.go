@@ -1,26 +1,23 @@
 package kademlia
 
 import (
-	//"encoding/base64"
 	"encoding/base64"
 	"fmt"
 	"net"
 	"strings"
 )
 
-// Network struct definition
 type Network struct {
-	LocalID   *KademliaID // The local node's Kademlia ID
-	LocalAddr string      // The local node's address
+	LocalID   *KademliaID
+	LocalAddr string
 	handler   MessageHandler
 }
 
-// MessageHandler interface for handling messages
+// interface to force whatever handler is to implement the HandleMessage func
 type MessageHandler interface {
 	HandleMessage(message string, senderAddr string) string
 }
 
-// Listen starts a listener on the specified IP and port
 func (network *Network) Listen(ip string, port int) {
 	addr := fmt.Sprintf("%s:%d", ip, port)
 	listener, err := net.Listen("tcp", addr)
@@ -38,7 +35,6 @@ func (network *Network) Listen(ip string, port int) {
 			fmt.Println("Error accepting connection:", err)
 			continue
 		}
-		// Parse and handle the connection asynchronously
 		go network.parseConnection(conn)
 	}
 }
@@ -46,7 +42,6 @@ func (network *Network) Listen(ip string, port int) {
 func (network *Network) parseConnection(conn net.Conn) {
 	defer conn.Close()
 
-	// Read message from connection
 	buffer := make([]byte, 4096)
 	n, err := conn.Read(buffer)
 	if err != nil {
@@ -57,21 +52,18 @@ func (network *Network) parseConnection(conn net.Conn) {
 	message := string(buffer[:n])
 	message = strings.TrimSpace(message)
 
-	// Get the remote IP address without the port
 	remoteIP, _, err := net.SplitHostPort(conn.RemoteAddr().String())
 	if err != nil {
 		fmt.Println("Error parsing remote address:", err)
 		return
 	}
 
-	// Since all nodes listen on port 8080, append it to the IP
+	// all nodes set to listen no network traffic on port 8080
 	senderAddress := net.JoinHostPort(remoteIP, "8080")
 
-	// Pass the message and remote address to the handler and get a response
 	if network.handler != nil {
 		response := network.handler.HandleMessage(message, senderAddress)
 		if response != "" {
-			// Send response back
 			_, err := conn.Write([]byte(response))
 			if err != nil {
 				fmt.Println("Error sending response:", err)
@@ -82,7 +74,7 @@ func (network *Network) parseConnection(conn net.Conn) {
 	}
 }
 
-// send a network messages with command
+// generic func that sends all command messages type
 func (network *Network) SendMessage(address string, message string) (string, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
@@ -111,7 +103,6 @@ func (network *Network) SendPing(contact *Contact) error {
 		fmt.Println("Error sending PING message:", err)
 		return err
 	}
-	// Handle the response
 	if network.handler != nil {
 		network.handler.HandleMessage(response, contact.Address)
 	}
@@ -126,7 +117,6 @@ func (network *Network) SendFindNode(contact *Contact, targetID *KademliaID) ([]
 		return nil, err
 	}
 
-	// Handle the response
 	if strings.HasPrefix(response, "FIND_NODE_RESPONSE") {
 		contactsStr := strings.TrimPrefix(response, "FIND_NODE_RESPONSE ")
 		contactsList := strings.Split(contactsStr, ";")
@@ -167,13 +157,11 @@ func (network *Network) SendStore(contact *Contact, hash string, data []byte) er
 func (network *Network) SendFindValue(contact *Contact, key string) ([]byte, bool, error) {
 	message := fmt.Sprintf("FIND_VALUE %s", key)
 
-	// Send the message to the contact's address
 	response, err := network.SendMessage(contact.Address, message)
 	if err != nil {
 		return nil, false, err
 	}
 
-	// Handle the response
 	if strings.HasPrefix(response, "VALUE ") {
 		dataBase64 := strings.TrimPrefix(response, "VALUE ")
 		data, err := base64.StdEncoding.DecodeString(dataBase64)
