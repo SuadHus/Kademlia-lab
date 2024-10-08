@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-// Kademlia represents the Kademlia distributed hash table.
 type Kademlia struct {
 	Network                   *Network
 	RoutingTableActionChannel chan RoutingTableAction // The channel to handle routing table actions
@@ -20,36 +19,31 @@ type Kademlia struct {
 	NodeCli                   *NodeCli
 }
 
-// RoutingTableAction represents an action that needs to be performed on the RoutingTable.
 type RoutingTableAction struct {
-	ActionType string                    // Type of action (e.g., "AddContact", "FindClosestContacts")
-	Contact    *Contact                  // Contact to add (for AddContact)
-	TargetID   *KademliaID               // TargetID (for FindClosestContacts)
-	ResponseCh chan RoutingTableResponse // Channel to send the response back to the caller
+	ActionType string
+	Contact    *Contact
+	TargetID   *KademliaID
+	ResponseCh chan RoutingTableResponse
 }
 
-// RoutingTableResponse is a generic response for routing table actions.
-// RoutingTableResponse is a generic response for routing table actions.
 type RoutingTableResponse struct {
-	ClosestContacts    []Contact // The closest contacts (for FindClosestContacts)
-	routingTableString string    // The string representation of the routing table
+	ClosestContacts    []Contact
+	routingTableString string
 }
 
-// DataStoreAction represents an action to be performed on the DataStore.
 type DataStoreAction struct {
-	ActionType string                 // "Store" or "Retrieve"
-	Key        string                 // The key (hash) for the data
-	Value      []byte                 // The data to store (for "Store" action)
-	ResponseCh chan DataStoreResponse // Channel to send the response
+	ActionType string
+	Key        string
+	Value      []byte
+	ResponseCh chan DataStoreResponse
 }
 
-// DataStoreResponse represents the response from a DataStore action.
 type DataStoreResponse struct {
-	Value   []byte // The data retrieved (for "Retrieve" action)
-	Success bool   // Indicates if the action was successful
+	Value   []byte
+	Success bool
 }
 
-// NewKademlia initializes a new Kademlia instance.
+// init func for kademlia instance
 func NewKademlia(localAddr string) *Kademlia {
 
 	network := &Network{
@@ -64,7 +58,7 @@ func NewKademlia(localAddr string) *Kademlia {
 	}
 
 	cli := &NodeCli{
-		nodeCli: kademlia,  // Set the Kademlia instance as the CLI handler
+		nodeCli: kademlia, // set the Kademlia instance as the CLI handler
 	}
 
 	kademlia.NodeCli = cli
@@ -73,14 +67,12 @@ func NewKademlia(localAddr string) *Kademlia {
 	go kademlia.dataStoreWorker()
 	go kademlia.routingTableWorker()
 
-	network.handler = kademlia
+	network.handler = kademlia // in go the interface is implemented like this since kademlia has the HandleMessages func
 
 	return kademlia
 }
 
-
 func (kademlia *Kademlia) JoinNetwork(root *Contact) {
-	// Send a PING message to the contact
 	kademlia.Network.SendPing(root)
 
 	time.Sleep(1 * time.Second)
@@ -88,7 +80,6 @@ func (kademlia *Kademlia) JoinNetwork(root *Contact) {
 	kademlia.LookupContact(kademlia.Network.LocalID)
 }
 
-// routingTableWorker processes routing table actions sequentially.
 func (kademlia *Kademlia) routingTableWorker() {
 	routingTable := NewRoutingTable(NewContact(kademlia.Network.LocalID, kademlia.Network.LocalAddr))
 
@@ -133,11 +124,11 @@ func (kademlia *Kademlia) PrintRoutingTable() {
 		ResponseCh: responseCh,
 	}
 
-	response := <-responseCh                         // Receive the response from the channel
-	fmt.Println("frog", response.routingTableString) // Print the routing table string
+	response := <-responseCh // Receive the response from the channel
+	fmt.Println(response.routingTableString)
 }
 
-// HandleMessage implements the MessageHandler interface.
+// HandleMessage implements the MessageHandler interface in the Network module
 func (kademlia *Kademlia) HandleMessage(message string, senderAddr string) string {
 	switch {
 	case strings.HasPrefix(message, "PING"):
@@ -200,7 +191,6 @@ func (kademlia *Kademlia) handlePingMessage(message string, senderAddr string) s
 	senderID := NewKademliaID(senderIDStr)
 	senderContact := NewContact(senderID, senderAddr)
 
-	// Create a response channel for this request
 	responseCh := make(chan RoutingTableResponse)
 	kademlia.RoutingTableActionChannel <- RoutingTableAction{
 		ActionType: "AddContact",
@@ -211,7 +201,6 @@ func (kademlia *Kademlia) handlePingMessage(message string, senderAddr string) s
 	// Wait for acknowledgment
 	<-responseCh
 
-	// Prepare PONG response including our own ID
 	response := fmt.Sprintf("PONG %s", kademlia.Network.LocalID.String())
 	return response
 }
@@ -227,7 +216,6 @@ func (kademlia *Kademlia) handlePongMessage(message string, senderAddr string) {
 	senderID := NewKademliaID(senderIDStr)
 	senderContact := NewContact(senderID, senderAddr)
 
-	// Create a response channel for this request
 	responseCh := make(chan RoutingTableResponse)
 	kademlia.RoutingTableActionChannel <- RoutingTableAction{
 		ActionType: "AddContact",
@@ -249,7 +237,6 @@ func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr strin
 	targetIDStr := parts[1]
 	targetID := NewKademliaID(targetIDStr)
 
-	// Create a response channel for this request
 	responseCh := make(chan RoutingTableResponse)
 	kademlia.RoutingTableActionChannel <- RoutingTableAction{
 		ActionType: "FindClosestContacts",
@@ -272,7 +259,6 @@ func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr strin
 	return responseMessage
 }
 
-// Ping a contact
 func (kademlia *Kademlia) Ping(contact *Contact) {
 	err := kademlia.Network.SendPing(contact)
 	if err != nil {
@@ -280,7 +266,6 @@ func (kademlia *Kademlia) Ping(contact *Contact) {
 	}
 }
 
-// SendFindNode sends a FIND_NODE message to a contact
 func (kademlia *Kademlia) SendFindNode(targetID *KademliaID, contact *Contact) []Contact {
 	contacts, err := kademlia.Network.SendFindNode(contact, targetID)
 	if err != nil {
@@ -325,12 +310,11 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 			break
 		}
 
-		// Sort unqueriedContacts by distance to the target ID
 		sort.Slice(unqueriedContacts, func(i, j int) bool {
 			return unqueriedContacts[i].ID.CalcDistance(targetID).Less(unqueriedContacts[j].ID.CalcDistance(targetID))
 		})
 
-		// Select α closest contacts to query in parallel
+		// Select alpha closest contacts to query in parallel
 		closestAlpha := unqueriedContacts
 		if len(unqueriedContacts) > alpha {
 			closestAlpha = unqueriedContacts[:alpha]
@@ -394,27 +378,20 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 	return finalClosest
 }
 
-// STORE LOGIC
-
-// SendStore sends a STORE message to the given contact to store the data.
 func (kademlia *Kademlia) SendStore(contact Contact, key string, data []byte) error {
 	return kademlia.Network.SendStore(&contact, key, data)
 }
 
-// StoreData stores the given data in the network according to Kademlia protocol.
 func (kademlia *Kademlia) StoreData(data []byte) error {
-	// Step 1: Hash the data to obtain the key
 	key := kademlia.HashData(data)
 	targetID := NewKademliaID(key)
 
-	// Step 2: Perform a node lookup for the key
 	closestContacts := kademlia.LookupContact(targetID)
 
 	if len(closestContacts) == 0 {
 		return fmt.Errorf("no contacts found to store the data")
 	}
 
-	// Step 3: Send STORE messages to the k closest nodes
 	var wg sync.WaitGroup
 	for _, contact := range closestContacts {
 		wg.Add(1)
@@ -427,23 +404,19 @@ func (kademlia *Kademlia) StoreData(data []byte) error {
 		}(contact)
 	}
 
-	// Wait for all STORE RPCs to complete
 	wg.Wait()
 	return nil
 }
 
-// RetrieveData retrieves data associated with the given key from the network.
 func (kademlia *Kademlia) RetrieveData(key string) ([]byte, error) {
 	targetID := NewKademliaID(key)
 
-	// Step 1: Perform a node lookup for the key
 	closestContacts := kademlia.LookupContact(targetID)
 
 	if len(closestContacts) == 0 {
 		return nil, fmt.Errorf("no contacts found to retrieve the data")
 	}
 
-	// Step 2: Send FIND_VALUE messages to the closest contacts
 	for _, contact := range closestContacts {
 		data, found, err := kademlia.SendFindValue(contact, key)
 		if err != nil {
@@ -455,11 +428,9 @@ func (kademlia *Kademlia) RetrieveData(key string) ([]byte, error) {
 		}
 	}
 
-	// If data not found, return an error
 	return nil, fmt.Errorf("data not found in the network")
 }
 
-// SendFindValue sends a FIND_VALUE message to the given contact.
 func (kademlia *Kademlia) SendFindValue(contact Contact, key string) ([]byte, bool, error) {
 	data, found, err := kademlia.Network.SendFindValue(&contact, key)
 	if err != nil {
@@ -490,7 +461,6 @@ func (kademlia *Kademlia) handleStoreMessage(message string, senderAddr string) 
 		return "STORE_ERROR Decoding error"
 	}
 
-	// Use DataStoreActionChannel to store data
 	responseCh := make(chan DataStoreResponse)
 	kademlia.DataStoreActionChannel <- DataStoreAction{
 		ActionType: "Store",
@@ -519,7 +489,6 @@ func (kademlia *Kademlia) handleFindValueMessage(message string, senderAddr stri
 	}
 	hash := parts[1]
 
-	// Use DataStoreActionChannel to retrieve data
 	responseCh := make(chan DataStoreResponse)
 	kademlia.DataStoreActionChannel <- DataStoreAction{
 		ActionType: "Retrieve",
