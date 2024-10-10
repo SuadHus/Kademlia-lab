@@ -13,7 +13,6 @@ type Network struct {
 	handler   MessageHandler
 }
 
-// MessageHandler interface for handling messages
 type MessageHandler interface {
 	HandleMessage(message string, senderAddr string) string
 }
@@ -65,7 +64,6 @@ func (network *Network) parseConnection(conn net.Conn) {
 	if network.handler != nil {
 		response := network.handler.HandleMessage(message, senderAddress)
 		if response != "" {
-			// Send response back
 			_, err := conn.Write([]byte(response))
 			if err != nil {
 				fmt.Println("Error sending response:", err)
@@ -78,6 +76,12 @@ func (network *Network) parseConnection(conn net.Conn) {
 
 // generic send msgs function to send all the messages commands of the network
 func (network *Network) SendMessage(address string, message string) (string, error) {
+
+	//check if port is missing add 8080
+	if !strings.Contains(address, ":") {
+		address = fmt.Sprintf("%s:8080", address)
+	}
+
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return "", err
@@ -100,6 +104,7 @@ func (network *Network) SendMessage(address string, message string) (string, err
 
 func (network *Network) SendPing(contact *Contact) error {
 	message := fmt.Sprintf("PING %s", network.LocalID.String())
+	fmt.Println("Sending PING message to", contact.Address)
 	response, err := network.SendMessage(contact.Address, message)
 	if err != nil {
 		fmt.Println("Error sending PING message:", err)

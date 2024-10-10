@@ -1,0 +1,1224 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>kademlia: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">kademlia/bucket.go (100.0%)</option>
+				
+				<option value="file1">kademlia/cmd/main.go (0.0%)</option>
+				
+				<option value="file2">kademlia/contact.go (90.0%)</option>
+				
+				<option value="file3">kademlia/kademlia.go (50.7%)</option>
+				
+				<option value="file4">kademlia/kademliaid.go (95.5%)</option>
+				
+				<option value="file5">kademlia/network.go (58.8%)</option>
+				
+				<option value="file6">kademlia/nodecli.go (24.0%)</option>
+				
+				<option value="file7">kademlia/routingtable.go (87.8%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package kademlia
+
+import (
+        "container/list"
+        "fmt"
+)
+
+// bucket definition
+// contains a List
+type bucket struct {
+        list *list.List
+}
+
+// newBucket returns a new instance of a bucket
+func newBucket() *bucket <span class="cov10" title="802">{
+        bucket := &amp;bucket{}
+        bucket.list = list.New()
+        return bucket
+}</span>
+
+// AddContact adds the Contact to the front of the bucket
+// or moves it to the front of the bucket if it already existed
+func (bucket *bucket) AddContact(contact Contact) <span class="cov4" title="15">{
+        var element *list.Element
+        for e := bucket.list.Front(); e != nil; e = e.Next() </span><span class="cov4" title="14">{
+                nodeID := e.Value.(Contact).ID
+
+                if (contact).ID.Equals(nodeID) </span><span class="cov1" title="2">{
+                        element = e
+                }</span>
+        }
+
+        <span class="cov4" title="15">if element == nil </span><span class="cov4" title="13">{
+                if bucket.list.Len() &lt; bucketSize </span><span class="cov4" title="13">{
+                        bucket.list.PushFront(contact)
+                }</span>
+        } else<span class="cov1" title="2"> {
+                bucket.list.MoveToFront(element)
+        }</span>
+        <span class="cov4" title="15">fmt.Println("Received BYE message:", bucket.list)</span>
+}
+
+// GetContactAndCalcDistance returns an array of Contacts where
+// the distance has already been calculated
+func (bucket *bucket) GetContactAndCalcDistance(target *KademliaID) []Contact <span class="cov9" title="801">{
+        var contacts []Contact
+
+        for elt := bucket.list.Front(); elt != nil; elt = elt.Next() </span><span class="cov4" title="11">{
+                contact := elt.Value.(Contact)
+                contact.CalcDistance(target)
+                contacts = append(contacts, contact)
+        }</span>
+
+        <span class="cov9" title="801">return contacts</span>
+}
+
+// Len return the size of the bucket
+func (bucket *bucket) Len() int <span class="cov2" title="3">{
+        return bucket.list.Len()
+}</span>
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package main
+
+import (
+        "fmt"
+        "kademlia"
+        "net/http"
+        "os"
+)
+
+func main() <span class="cov0" title="0">{
+        fmt.Println("Starting Kademlia network...")
+
+        localAddr := os.Getenv("CONTAINER_IP")
+        contactAddr := os.Getenv("CONTACT_ADDRESS")
+        if localAddr == "" </span><span class="cov0" title="0">{
+                localAddr = "127.0.0.1"
+        }</span>
+
+        <span class="cov0" title="0">myKademlia := kademlia.NewKademlia(localAddr)
+
+        go myKademlia.Network.Listen("0.0.0.0", 8080)
+
+        // Create a contact for the peer node
+        if contactAddr != "" </span><span class="cov0" title="0">{
+                id := kademlia.NewKademliaID("FFFFFFFF00000000000000000000000000000000")
+                contact := kademlia.NewContact(id, contactAddr)
+
+                myKademlia.JoinNetwork(&amp;contact)
+
+                myKademlia.PrintRoutingTable()
+        }</span> else<span class="cov0" title="0"> {
+                fmt.Println("CONTACT_ADDRESS not set in environment")
+        }</span>
+
+        <span class="cov0" title="0">fmt.Println("HTTP server listening on port 8001")
+        http.ListenAndServe(":8001", nil)
+
+        select </span>{}
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package kademlia
+
+import (
+        "fmt"
+        "sort"
+)
+
+// Contact definition
+// stores the KademliaID, the ip address and the distance
+type Contact struct {
+        ID       *KademliaID
+        Address  string
+        distance *KademliaID
+}
+
+// NewContact returns a new instance of a Contact
+func NewContact(id *KademliaID, address string) Contact <span class="cov5" title="26">{
+        return Contact{id, address, nil}
+}</span>
+
+// CalcDistance calculates the distance to the target and
+// fills the contacts distance field
+func (contact *Contact) CalcDistance(target *KademliaID) <span class="cov4" title="15">{
+        contact.distance = contact.ID.CalcDistance(target)
+}</span>
+
+// Less returns true if contact.distance &lt; otherContact.distance
+func (contact *Contact) Less(otherContact *Contact) bool <span class="cov4" title="11">{
+        return contact.distance.Less(otherContact.distance)
+}</span>
+
+// String returns a simple string representation of a Contact
+func (contact *Contact) String() string <span class="cov0" title="0">{
+        return fmt.Sprintf(`contact("%s", "%s")`, contact.ID, contact.Address)
+}</span>
+
+// ContactCandidates definition
+// stores an array of Contacts
+type ContactCandidates struct {
+        contacts []Contact
+}
+
+// Append an array of Contacts to the ContactCandidates
+func (candidates *ContactCandidates) Append(contacts []Contact) <span class="cov9" title="801">{
+        candidates.contacts = append(candidates.contacts, contacts...)
+}</span>
+
+// GetContacts returns the first count number of Contacts
+func (candidates *ContactCandidates) GetContacts(count int) []Contact <span class="cov3" title="5">{
+        return candidates.contacts[:count]
+}</span>
+
+// Sort the Contacts in ContactCandidates
+func (candidates *ContactCandidates) Sort() <span class="cov3" title="6">{
+        sort.Sort(candidates)
+}</span>
+
+// Len returns the length of the ContactCandidates
+func (candidates *ContactCandidates) Len() int <span class="cov10" title="809">{
+        return len(candidates.contacts)
+}</span>
+
+// Swap the position of the Contacts at i and j
+// WARNING does not check if either i or j is within range
+func (candidates *ContactCandidates) Swap(i, j int) <span class="cov3" title="5">{
+        candidates.contacts[i], candidates.contacts[j] = candidates.contacts[j], candidates.contacts[i]
+}</span>
+
+// Less returns true if the Contact at index i is smaller than
+// the Contact at index j
+func (candidates *ContactCandidates) Less(i, j int) bool <span class="cov4" title="11">{
+        return candidates.contacts[i].Less(&amp;candidates.contacts[j])
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package kademlia
+
+import (
+        "crypto/sha1"
+        "encoding/base64"
+        "encoding/hex"
+        "fmt"
+        "sort"
+        "strings"
+        "sync"
+        "time"
+)
+
+type Kademlia struct {
+        Network                   *Network
+        RoutingTableActionChannel chan RoutingTableAction // channel to handle routing table actions
+        DataStoreActionChannel    chan DataStoreAction    // channel to handle data store actions
+        DataStore                 map[string][]byte
+        NodeCli                   *NodeCli
+}
+
+type RoutingTableAction struct {
+        ActionType string
+        Contact    *Contact
+        TargetID   *KademliaID
+        ResponseCh chan RoutingTableResponse
+}
+
+type RoutingTableResponse struct {
+        ClosestContacts    []Contact
+        routingTableString string
+}
+
+type DataStoreAction struct {
+        ActionType string
+        Key        string
+        Value      []byte
+        ResponseCh chan DataStoreResponse
+}
+
+type DataStoreResponse struct {
+        Value   []byte
+        Success bool
+}
+
+// NewKademlia initializes a new Kademlia instance.
+func NewKademlia(localAddr string) *Kademlia <span class="cov5" title="3">{
+
+        network := &amp;Network{
+                LocalID:   NewRandomKademliaID(),
+                LocalAddr: localAddr,
+        }
+
+        kademlia := &amp;Kademlia{
+                Network:                   network,
+                RoutingTableActionChannel: make(chan RoutingTableAction),
+                DataStoreActionChannel:    make(chan DataStoreAction),
+        }
+
+        cli := &amp;NodeCli{
+                nodeCli: kademlia, // Set the Kademlia instance as the CLI handler
+        }
+
+        kademlia.NodeCli = cli
+
+        go cli.StartCLI() // listens for input form terminal, run "docker attach psID"
+        go kademlia.dataStoreWorker()
+        go kademlia.routingTableWorker()
+
+        network.handler = kademlia // in go this works since messages handler is implemented in kademlia
+
+        return kademlia
+}</span>
+
+func (kademlia *Kademlia) JoinNetwork(root *Contact) <span class="cov1" title="1">{
+        kademlia.Network.SendPing(root)
+        time.Sleep(1 * time.Second)
+        kademlia.LookupContact(kademlia.Network.LocalID) // lookup on self to populate rt
+}</span>
+
+func (kademlia *Kademlia) routingTableWorker() <span class="cov5" title="3">{
+        routingTable := NewRoutingTable(NewContact(kademlia.Network.LocalID, kademlia.Network.LocalAddr))
+
+        for action := range kademlia.RoutingTableActionChannel </span><span class="cov10" title="10">{
+                switch action.ActionType </span>{
+                case "AddContact":<span class="cov6" title="4">
+                        routingTable.AddContact(*action.Contact)
+                        action.ResponseCh &lt;- RoutingTableResponse{}</span> // Send an empty response to acknowledge completion
+
+                case "FindClosestContacts":<span class="cov6" title="4">
+                        closestContacts := routingTable.FindClosestContacts(action.TargetID, bucketSize)
+                        action.ResponseCh &lt;- RoutingTableResponse{ClosestContacts: closestContacts}</span>
+
+                case "PrintRoutingTable":<span class="cov3" title="2">
+                        routingTableString := routingTable.PrintBuckets()
+                        action.ResponseCh &lt;- RoutingTableResponse{routingTableString: routingTableString}</span>
+                }
+        }
+}
+
+// dataStoreWorker processes data store actions sequentially, same design as the rt worker
+func (kademlia *Kademlia) dataStoreWorker() <span class="cov5" title="3">{
+        dataStore := make(map[string][]byte)
+
+        for action := range kademlia.DataStoreActionChannel </span><span class="cov0" title="0">{
+                switch action.ActionType </span>{
+                case "Store":<span class="cov0" title="0">
+                        dataStore[action.Key] = action.Value
+                        action.ResponseCh &lt;- DataStoreResponse{Success: true}</span>
+                case "Retrieve":<span class="cov0" title="0">
+                        value, found := dataStore[action.Key]
+                        action.ResponseCh &lt;- DataStoreResponse{Value: value, Success: found}</span>
+                }
+        }
+}
+
+// helper func for dev cycle
+func (kademlia *Kademlia) PrintRoutingTable() <span class="cov3" title="2">{
+        responseCh := make(chan RoutingTableResponse)
+        kademlia.RoutingTableActionChannel &lt;- RoutingTableAction{
+                ActionType: "PrintRoutingTable",
+                ResponseCh: responseCh,
+        }
+
+        response := &lt;-responseCh // Receive the response from the channel
+        fmt.Println(response.routingTableString)
+}</span>
+
+func (kademlia *Kademlia) HandleMessage(message string, senderAddr string) string <span class="cov7" title="5">{
+        switch </span>{
+        case strings.HasPrefix(message, "PING"):<span class="cov3" title="2">
+                kademlia.PrintRoutingTable()
+                return kademlia.handlePingMessage(message, senderAddr)</span>
+        case strings.HasPrefix(message, "PONG"):<span class="cov1" title="1">
+                kademlia.handlePongMessage(message, senderAddr)
+                return ""</span>
+        case strings.HasPrefix(message, "FIND_NODE"):<span class="cov3" title="2">
+                return kademlia.handleFindNodeMessage(message, senderAddr)</span>
+        case strings.HasPrefix(message, "FIND_VALUE"):<span class="cov0" title="0">
+                return kademlia.handleFindValueMessage(message, senderAddr)</span>
+        case strings.HasPrefix(message, "STORE"):<span class="cov0" title="0">
+                return kademlia.handleStoreMessage(message, senderAddr)</span>
+        default:<span class="cov0" title="0">
+                fmt.Println("Received unknown message:", message)
+                return ""</span>
+        }
+}
+
+func (kademlia *Kademlia) HandleCliMessage(message string, senderAddr string) string <span class="cov0" title="0">{
+        parts := strings.Split(message, " ")
+        switch parts[0] </span>{
+        case "put":<span class="cov0" title="0">
+                if len(parts) &lt; 2 </span><span class="cov0" title="0">{
+                        return "Usage: put &lt;file_content (strings for now)&gt;"
+                }</span>
+                <span class="cov0" title="0">content := parts[1]
+                err := kademlia.StoreData([]byte(content))
+                if err != nil </span><span class="cov0" title="0">{
+                        return fmt.Sprintf("Error storing data: %v", err)
+                }</span>
+                <span class="cov0" title="0">hash := kademlia.HashData([]byte(content))
+                return fmt.Sprintf("Data stored with hash: %s", hash)</span>
+        case "get":<span class="cov0" title="0">
+                if len(parts) &lt; 2 </span><span class="cov0" title="0">{
+                        return "Usage: get &lt;hash&gt;"
+                }</span>
+                <span class="cov0" title="0">hash := parts[1]
+                data, err := kademlia.RetrieveData(hash)
+                if err != nil </span><span class="cov0" title="0">{
+                        return fmt.Sprintf("Error retrieving data: %v", err)
+                }</span>
+                <span class="cov0" title="0">return fmt.Sprintf("Data retrieved: %s", string(data))</span>
+        case "exit":<span class="cov0" title="0">
+                return "Exiting CLI..."</span>
+        default:<span class="cov0" title="0">
+                return "Unknown command"</span>
+        }
+}
+
+func (kademlia *Kademlia) handlePingMessage(message string, senderAddr string) string <span class="cov3" title="2">{
+        fmt.Println("Received PING message from", senderAddr)
+        parts := strings.Split(message, " ")
+        if len(parts) &lt; 2 </span><span class="cov0" title="0">{
+                fmt.Println("Invalid PING message format")
+                return ""
+        }</span>
+        <span class="cov3" title="2">senderIDStr := parts[1]
+        senderID := NewKademliaID(senderIDStr)
+        senderContact := NewContact(senderID, senderAddr)
+
+        responseCh := make(chan RoutingTableResponse)
+        kademlia.RoutingTableActionChannel &lt;- RoutingTableAction{
+                ActionType: "AddContact",
+                Contact:    &amp;senderContact,
+                ResponseCh: responseCh,
+        }
+
+        // Wait for acknowledgment
+        &lt;-responseCh
+
+        response := fmt.Sprintf("PONG %s", kademlia.Network.LocalID.String())
+        return response</span>
+}
+
+func (kademlia *Kademlia) handlePongMessage(message string, senderAddr string) <span class="cov1" title="1">{
+        fmt.Println("Received PONG message from", senderAddr)
+        parts := strings.Split(message, " ")
+        if len(parts) &lt; 2 </span><span class="cov0" title="0">{
+                fmt.Println("Invalid PONG message format")
+                return
+        }</span>
+        <span class="cov1" title="1">senderIDStr := parts[1]
+        senderID := NewKademliaID(senderIDStr)
+        senderContact := NewContact(senderID, senderAddr)
+
+        responseCh := make(chan RoutingTableResponse)
+        kademlia.RoutingTableActionChannel &lt;- RoutingTableAction{
+                ActionType: "AddContact",
+                Contact:    &amp;senderContact,
+                ResponseCh: responseCh,
+        }
+
+        // Wait for acknowledgment
+        &lt;-responseCh</span>
+}
+
+func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr string) string <span class="cov3" title="2">{
+        fmt.Println("Received FIND_NODE message from", senderAddr)
+        parts := strings.Split(message, " ")
+        if len(parts) &lt; 2 </span><span class="cov0" title="0">{
+                fmt.Println("Invalid FIND_NODE message format")
+                return ""
+        }</span>
+        <span class="cov3" title="2">targetIDStr := parts[1]
+        targetID := NewKademliaID(targetIDStr)
+
+        responseCh := make(chan RoutingTableResponse)
+        kademlia.RoutingTableActionChannel &lt;- RoutingTableAction{
+                ActionType: "FindClosestContacts",
+                TargetID:   targetID,
+                ResponseCh: responseCh,
+        }
+
+        // Wait for the result
+        response := &lt;-responseCh
+        closestContacts := response.ClosestContacts
+
+        // Prepare response
+        var contactsStrList []string
+        for _, contact := range closestContacts </span><span class="cov3" title="2">{
+                contactStr := fmt.Sprintf("%s|%s", contact.ID.String(), contact.Address)
+                contactsStrList = append(contactsStrList, contactStr)
+        }</span>
+        <span class="cov3" title="2">responseMessage := "FIND_NODE_RESPONSE " + strings.Join(contactsStrList, ";")
+
+        return responseMessage</span>
+}
+
+func (kademlia *Kademlia) Ping(contact *Contact) <span class="cov0" title="0">{
+        err := kademlia.Network.SendPing(contact)
+        if err != nil </span><span class="cov0" title="0">{
+                fmt.Println("Error pinging contact:", err)
+        }</span>
+}
+
+func (kademlia *Kademlia) SendFindNode(targetID *KademliaID, contact *Contact) []Contact <span class="cov1" title="1">{
+        contacts, err := kademlia.Network.SendFindNode(contact, targetID)
+        if err != nil </span><span class="cov0" title="0">{
+                fmt.Println("Error during SendFindNode:", err)
+                return nil
+        }</span>
+        <span class="cov1" title="1">return contacts</span>
+}
+
+func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact <span class="cov1" title="1">{
+        alpha := 3
+        k := bucketSize
+
+        // ask worker thread for 20 closest contacts
+        responseCh := make(chan RoutingTableResponse)
+        kademlia.RoutingTableActionChannel &lt;- RoutingTableAction{
+                ActionType: "FindClosestContacts",
+                TargetID:   targetID,
+                ResponseCh: responseCh,
+        }
+        response := &lt;-responseCh
+        closestContacts := response.ClosestContacts
+
+        shortlist := make(map[string]Contact)
+        queried := make(map[string]bool)
+
+        for _, contact := range closestContacts </span><span class="cov1" title="1">{
+                shortlist[contact.ID.String()] = contact
+        }</span>
+
+        <span class="cov1" title="1">for </span><span class="cov3" title="2">{
+                // Find the alpha closest unqueried contacts
+                var unqueriedContacts []Contact
+                for _, contact := range shortlist </span><span class="cov3" title="2">{
+                        if !queried[contact.ID.String()] </span><span class="cov1" title="1">{
+                                unqueriedContacts = append(unqueriedContacts, contact)
+                        }</span>
+                }
+
+                // done if no unqueried contacts left
+                <span class="cov3" title="2">if len(unqueriedContacts) == 0 </span><span class="cov1" title="1">{
+                        break</span>
+                }
+
+                <span class="cov1" title="1">sort.Slice(unqueriedContacts, func(i, j int) bool </span><span class="cov0" title="0">{
+                        return unqueriedContacts[i].ID.CalcDistance(targetID).Less(unqueriedContacts[j].ID.CalcDistance(targetID))
+                }</span>)
+
+                <span class="cov1" title="1">closestAlpha := unqueriedContacts
+                if len(unqueriedContacts) &gt; alpha </span><span class="cov0" title="0">{
+                        closestAlpha = unqueriedContacts[:alpha]
+                }</span>
+
+                // Use WaitGroup to wait for parallel queries to complete
+                <span class="cov1" title="1">var wg sync.WaitGroup
+                resultsChannel := make(chan []Contact, len(closestAlpha))
+
+                for _, contact := range closestAlpha </span><span class="cov1" title="1">{
+                        queried[contact.ID.String()] = true
+                        wg.Add(1)
+
+                        go func(contact Contact) </span><span class="cov1" title="1">{
+
+                                defer wg.Done()
+                                contactsReceived := kademlia.SendFindNode(targetID, &amp;contact)
+
+                                resultsChannel &lt;- contactsReceived
+
+                        }</span>(contact)
+
+                        <span class="cov1" title="1">kademlia.RoutingTableActionChannel &lt;- RoutingTableAction{
+                                ActionType: "AddContact",
+                                Contact:    &amp;contact,
+                                ResponseCh: responseCh,
+                        }
+                        &lt;-responseCh</span>
+                }
+                <span class="cov1" title="1">wg.Wait()
+                close(resultsChannel)
+
+                // Collect results from all parallel queries
+                for contactsReceived := range resultsChannel </span><span class="cov1" title="1">{
+                        for _, newContact := range contactsReceived </span><span class="cov1" title="1">{
+                                if newContact.ID.Equals(kademlia.Network.LocalID) </span><span class="cov1" title="1">{
+                                        continue</span>
+                                }
+                                <span class="cov0" title="0">if _, exists := shortlist[newContact.ID.String()]; !exists </span><span class="cov0" title="0">{
+                                        shortlist[newContact.ID.String()] = newContact
+                                }</span>
+                        }
+                }
+        }
+
+        // Convert the shortlist to a slice and sort it by distance to the target ID
+        <span class="cov1" title="1">var finalClosest []Contact
+        for _, contact := range shortlist </span><span class="cov1" title="1">{
+                finalClosest = append(finalClosest, contact)
+        }</span>
+
+        <span class="cov1" title="1">sort.Slice(finalClosest, func(i, j int) bool </span><span class="cov0" title="0">{
+                return finalClosest[i].ID.CalcDistance(targetID).Less(finalClosest[j].ID.CalcDistance(targetID))
+        }</span>)
+
+        // Return the k closest contacts
+        <span class="cov1" title="1">if len(finalClosest) &gt; k </span><span class="cov0" title="0">{
+                finalClosest = finalClosest[:k]
+        }</span>
+
+        <span class="cov1" title="1">return finalClosest</span>
+}
+
+func (kademlia *Kademlia) SendStore(contact Contact, key string, data []byte) error <span class="cov0" title="0">{
+        return kademlia.Network.SendStore(&amp;contact, key, data)
+}</span>
+
+func (kademlia *Kademlia) StoreData(data []byte) error <span class="cov0" title="0">{
+        key := kademlia.HashData(data)
+        targetID := NewKademliaID(key)
+
+        closestContacts := kademlia.LookupContact(targetID)
+
+        if len(closestContacts) == 0 </span><span class="cov0" title="0">{
+                return fmt.Errorf("no contacts found to store the data")
+        }</span>
+
+        <span class="cov0" title="0">var wg sync.WaitGroup
+        for _, contact := range closestContacts </span><span class="cov0" title="0">{
+                wg.Add(1)
+                go func(contact Contact) </span><span class="cov0" title="0">{
+                        defer wg.Done()
+                        err := kademlia.SendStore(contact, key, data)
+                        if err != nil </span><span class="cov0" title="0">{
+                                fmt.Printf("Error storing data on %s: %v\n", contact.Address, err)
+                        }</span>
+                }(contact)
+        }
+
+        <span class="cov0" title="0">wg.Wait()
+        return nil</span>
+}
+
+func (kademlia *Kademlia) RetrieveData(key string) ([]byte, error) <span class="cov0" title="0">{
+        targetID := NewKademliaID(key)
+
+        closestContacts := kademlia.LookupContact(targetID)
+
+        if len(closestContacts) == 0 </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("no contacts found to retrieve the data")
+        }</span>
+
+        <span class="cov0" title="0">for _, contact := range closestContacts </span><span class="cov0" title="0">{
+                data, found, err := kademlia.SendFindValue(contact, key)
+                if err != nil </span><span class="cov0" title="0">{
+                        fmt.Printf("Error retrieving data from %s: %v\n", contact.Address, err)
+                        continue</span>
+                }
+                <span class="cov0" title="0">if found </span><span class="cov0" title="0">{
+                        return data, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil, fmt.Errorf("data not found in the network")</span>
+}
+
+func (kademlia *Kademlia) SendFindValue(contact Contact, key string) ([]byte, bool, error) <span class="cov0" title="0">{
+        data, found, err := kademlia.Network.SendFindValue(&amp;contact, key)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, false, err
+        }</span>
+        <span class="cov0" title="0">return data, found, nil</span>
+}
+
+func (kademlia *Kademlia) HashData(data []byte) string <span class="cov0" title="0">{
+        hash := sha1.Sum(data)
+        return hex.EncodeToString(hash[:])
+}</span>
+
+func (kademlia *Kademlia) handleStoreMessage(message string, senderAddr string) string <span class="cov0" title="0">{
+        fmt.Println("Received STORE message from", senderAddr)
+
+        parts := strings.SplitN(message, " ", 3)
+        if len(parts) &lt; 3 </span><span class="cov0" title="0">{
+                fmt.Println("Invalid STORE message format")
+                return "STORE_ERROR Invalid format"
+        }</span>
+        <span class="cov0" title="0">hash := parts[1]
+        dataBase64 := parts[2]
+        data, err := base64.StdEncoding.DecodeString(dataBase64)
+        if err != nil </span><span class="cov0" title="0">{
+                fmt.Println("Error decoding data:", err)
+                return "STORE_ERROR Decoding error"
+        }</span>
+
+        <span class="cov0" title="0">responseCh := make(chan DataStoreResponse)
+        kademlia.DataStoreActionChannel &lt;- DataStoreAction{
+                ActionType: "Store",
+                Key:        hash,
+                Value:      data,
+                ResponseCh: responseCh,
+        }
+
+        // Wait for the response
+        response := &lt;-responseCh
+        if response.Success </span><span class="cov0" title="0">{
+                fmt.Println("Stored data with hash:", hash)
+                return "STORE_OK"
+        }</span> else<span class="cov0" title="0"> {
+                return "STORE_ERROR Failed to store data"
+        }</span>
+}
+
+func (kademlia *Kademlia) handleFindValueMessage(message string, senderAddr string) string <span class="cov0" title="0">{
+        fmt.Println("Received FIND_VALUE message from", senderAddr)
+
+        parts := strings.Split(message, " ")
+        if len(parts) &lt; 2 </span><span class="cov0" title="0">{
+                fmt.Println("Invalid FIND_VALUE message format")
+                return ""
+        }</span>
+        <span class="cov0" title="0">hash := parts[1]
+
+        responseCh := make(chan DataStoreResponse)
+        kademlia.DataStoreActionChannel &lt;- DataStoreAction{
+                ActionType: "Retrieve",
+                Key:        hash,
+                ResponseCh: responseCh,
+        }
+
+        // Wait for the response
+        response := &lt;-responseCh
+        if response.Success </span><span class="cov0" title="0">{
+                responseMessage := fmt.Sprintf("VALUE %s", base64.StdEncoding.EncodeToString(response.Value))
+                return responseMessage
+        }</span> else<span class="cov0" title="0"> {
+                responseMessage := "VALUE_NOT_FOUND"
+                return responseMessage
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package kademlia
+
+import (
+        "encoding/hex"
+        "math/rand"
+)
+
+// the static number of bytes in a KademliaID
+const IDLength = 20
+
+// type definition of a KademliaID
+type KademliaID [IDLength]byte
+
+// NewKademliaID returns a new instance of a KademliaID based on the string input
+func NewKademliaID(data string) *KademliaID <span class="cov5" title="28">{
+        decoded, _ := hex.DecodeString(data)
+
+        newKademliaID := KademliaID{}
+        for i := 0; i &lt; IDLength; i++ </span><span class="cov9" title="560">{
+                newKademliaID[i] = decoded[i]
+        }</span>
+
+        <span class="cov5" title="28">return &amp;newKademliaID</span>
+}
+
+// NewRandomKademliaID returns a new instance of a random KademliaID,
+// change this to a better version if you like
+func NewRandomKademliaID() *KademliaID <span class="cov4" title="11">{
+        newKademliaID := KademliaID{}
+        for i := 0; i &lt; IDLength; i++ </span><span class="cov8" title="220">{
+                newKademliaID[i] = uint8(rand.Intn(256))
+        }</span>
+        <span class="cov4" title="11">return &amp;newKademliaID</span>
+}
+
+// Less returns true if kademliaID &lt; otherKademliaID (bitwise)
+func (kademliaID KademliaID) Less(otherKademliaID *KademliaID) bool <span class="cov4" title="12">{
+        for i := 0; i &lt; IDLength; i++ </span><span class="cov5" title="30">{
+                if kademliaID[i] != otherKademliaID[i] </span><span class="cov4" title="12">{
+                        return kademliaID[i] &lt; otherKademliaID[i]
+                }</span>
+        }
+        <span class="cov0" title="0">return false</span>
+}
+
+// Equals returns true if kademliaID == otherKademliaID (bitwise)
+func (kademliaID KademliaID) Equals(otherKademliaID *KademliaID) bool <span class="cov5" title="21">{
+        for i := 0; i &lt; IDLength; i++ </span><span class="cov8" title="210">{
+                if kademliaID[i] != otherKademliaID[i] </span><span class="cov4" title="12">{
+                        return false
+                }</span>
+        }
+        <span class="cov4" title="9">return true</span>
+}
+
+// CalcDistance returns a new instance of a KademliaID that is built
+// through a bitwise XOR operation betweeen kademliaID and target
+func (kademliaID KademliaID) CalcDistance(target *KademliaID) *KademliaID <span class="cov5" title="34">{
+        result := KademliaID{}
+        for i := 0; i &lt; IDLength; i++ </span><span class="cov10" title="680">{
+                result[i] = kademliaID[i] ^ target[i]
+        }</span>
+        <span class="cov5" title="34">return &amp;result</span>
+}
+
+// String returns a simple string representation of a KademliaID
+func (kademliaID *KademliaID) String() string <span class="cov4" title="14">{
+        return hex.EncodeToString(kademliaID[0:IDLength])
+}</span>
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package kademlia
+
+import (
+        "encoding/base64"
+        "fmt"
+        "net"
+        "strings"
+)
+
+type Network struct {
+        LocalID   *KademliaID
+        LocalAddr string
+        handler   MessageHandler
+}
+
+// interface to force whatever handler is to implement the HandleMessage func
+type MessageHandler interface {
+        HandleMessage(message string, senderAddr string) string
+}
+
+func (network *Network) Listen(ip string, port int) <span class="cov7" title="4">{
+        addr := fmt.Sprintf("%s:%d", ip, port)
+        listener, err := net.Listen("tcp", addr)
+        if err != nil </span><span class="cov1" title="1">{
+                fmt.Println("Error starting the listener:", err)
+                return
+        }</span>
+        <span class="cov6" title="3">defer listener.Close()
+
+        fmt.Println("Listening on", addr)
+
+        for </span><span class="cov10" title="6">{
+                conn, err := listener.Accept()
+                if err != nil </span><span class="cov0" title="0">{
+                        fmt.Println("Error accepting connection:", err)
+                        continue</span>
+                }
+                <span class="cov6" title="3">go network.parseConnection(conn)</span>
+        }
+}
+
+func (network *Network) parseConnection(conn net.Conn) <span class="cov6" title="3">{
+        defer conn.Close()
+
+        buffer := make([]byte, 4096)
+        n, err := conn.Read(buffer)
+        if err != nil </span><span class="cov0" title="0">{
+                fmt.Println("Error reading from connection:", err)
+                return
+        }</span>
+
+        <span class="cov6" title="3">message := string(buffer[:n])
+        message = strings.TrimSpace(message)
+
+        remoteIP, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+        if err != nil </span><span class="cov0" title="0">{
+                fmt.Println("Error parsing remote address:", err)
+                return
+        }</span>
+
+        <span class="cov6" title="3">senderAddress := net.JoinHostPort(remoteIP, "8080")
+
+        if network.handler != nil </span><span class="cov6" title="3">{
+                response := network.handler.HandleMessage(message, senderAddress)
+                if response != "" </span><span class="cov6" title="3">{
+                        _, err := conn.Write([]byte(response))
+                        if err != nil </span><span class="cov0" title="0">{
+                                fmt.Println("Error sending response:", err)
+                        }</span>
+                }
+        } else<span class="cov0" title="0"> {
+                fmt.Println("No message handler set")
+        }</span>
+}
+
+func (network *Network) SendMessage(address string, message string) (string, error) <span class="cov6" title="3">{
+
+        //check if port is missing add 8080
+        if !strings.Contains(address, ":") </span><span class="cov0" title="0">{
+                address = fmt.Sprintf("%s:8080", address)
+        }</span>
+
+        <span class="cov6" title="3">conn, err := net.Dial("tcp", address)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+        <span class="cov6" title="3">defer conn.Close()
+        _, err = conn.Write([]byte(message))
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+
+        <span class="cov6" title="3">buffer := make([]byte, 4096)
+        n, err := conn.Read(buffer)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+        <span class="cov6" title="3">response := string(buffer[:n])
+        response = strings.TrimSpace(response)
+        return response, nil</span>
+}
+
+func (network *Network) SendPing(contact *Contact) error <span class="cov4" title="2">{
+        message := fmt.Sprintf("PING %s", network.LocalID.String())
+        fmt.Println("Sending PING message to", contact.Address)
+        response, err := network.SendMessage(contact.Address, message)
+        if err != nil </span><span class="cov0" title="0">{
+                fmt.Println("Error sending PING message:", err)
+                return err
+        }</span>
+        <span class="cov4" title="2">if network.handler != nil </span><span class="cov4" title="2">{
+                network.handler.HandleMessage(response, contact.Address)
+        }</span>
+        <span class="cov4" title="2">return nil</span>
+}
+
+func (network *Network) SendFindNode(contact *Contact, targetID *KademliaID) ([]Contact, error) <span class="cov1" title="1">{
+        message := fmt.Sprintf("FIND_NODE %s", targetID.String())
+        response, err := network.SendMessage(contact.Address, message)
+        if err != nil </span><span class="cov0" title="0">{
+                fmt.Println("Error sending FIND_NODE message:", err)
+                return nil, err
+        }</span>
+
+        <span class="cov1" title="1">if strings.HasPrefix(response, "FIND_NODE_RESPONSE") </span><span class="cov1" title="1">{
+                contactsStr := strings.TrimPrefix(response, "FIND_NODE_RESPONSE ")
+                contactsList := strings.Split(contactsStr, ";")
+                var contacts []Contact
+                for _, contactStr := range contactsList </span><span class="cov1" title="1">{
+                        parts := strings.Split(contactStr, "|")
+                        if len(parts) != 2 </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                        <span class="cov1" title="1">idStr := parts[0]
+                        address := parts[1]
+                        id := NewKademliaID(idStr)
+                        contact := NewContact(id, address)
+                        contacts = append(contacts, contact)</span>
+                }
+                <span class="cov1" title="1">return contacts, nil</span>
+        } else<span class="cov0" title="0"> {
+                fmt.Println("Invalid FIND_NODE response:", response)
+                return nil, fmt.Errorf("Invalid FIND_NODE response")
+        }</span>
+}
+
+func (network *Network) SendStore(contact *Contact, hash string, data []byte) error <span class="cov0" title="0">{
+        dataBase64 := base64.StdEncoding.EncodeToString(data)
+        message := fmt.Sprintf("STORE %s %s", hash, dataBase64)
+        response, err := network.SendMessage(contact.Address, message)
+        if err != nil </span><span class="cov0" title="0">{
+                fmt.Println("Error sending STORE message:", err)
+                return err
+        }</span>
+        <span class="cov0" title="0">if response != "STORE_OK" </span><span class="cov0" title="0">{
+                fmt.Println("Error response from STORE:", response)
+                return fmt.Errorf("Store failed: %s", response)
+        }</span>
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (network *Network) SendFindValue(contact *Contact, key string) ([]byte, bool, error) <span class="cov0" title="0">{
+        message := fmt.Sprintf("FIND_VALUE %s", key)
+
+        response, err := network.SendMessage(contact.Address, message)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, false, err
+        }</span>
+
+        <span class="cov0" title="0">if strings.HasPrefix(response, "VALUE ") </span><span class="cov0" title="0">{
+                dataBase64 := strings.TrimPrefix(response, "VALUE ")
+                data, err := base64.StdEncoding.DecodeString(dataBase64)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, false, err
+                }</span>
+                <span class="cov0" title="0">return data, true, nil</span>
+        } else<span class="cov0" title="0"> if response == "VALUE_NOT_FOUND" </span><span class="cov0" title="0">{
+                return nil, false, nil
+        }</span> else<span class="cov0" title="0"> {
+                return nil, false, fmt.Errorf("unexpected response: %s", response)
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package kademlia
+
+import (
+        "bufio"
+        "fmt"
+        "os"
+        "strings"
+)
+
+type NodeCli struct {
+        nodeCli CliMessageHandler
+}
+
+// MessageHandler interface to pass cli commands to kademlia
+type CliMessageHandler interface {
+        HandleCliMessage(message string, senderAddr string) string
+}
+
+func (cli *NodeCli) StartCLI() <span class="cov10" title="3">{
+        scanner := bufio.NewScanner(os.Stdin)
+        fmt.Println("Kademlia CLI started. Type 'exit' to quit.")
+
+        for </span><span class="cov10" title="3">{
+                fmt.Print("&gt; ")
+                if !scanner.Scan() </span><span class="cov10" title="3">{
+                        break</span>
+                }
+                <span class="cov0" title="0">input := scanner.Text()
+
+                trimmedInput := strings.TrimSpace(input)
+
+                if trimmedInput == "exit" </span><span class="cov0" title="0">{
+                        fmt.Println("Exiting Kademlia Node CLI...")
+                        break</span>
+                }
+
+                <span class="cov0" title="0">if trimmedInput == "help" </span><span class="cov0" title="0">{
+                        fmt.Println("Commands:\n - put &lt;data&gt; : Store data in the Kademlia network\n - get &lt;hash&gt; : Retrieve data using its hash")
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">if strings.HasPrefix(trimmedInput, "put ") </span><span class="cov0" title="0">{
+                        dataToStore := strings.TrimPrefix(trimmedInput, "put ")
+                        response := cli.nodeCli.HandleCliMessage("put "+dataToStore, "")
+                        fmt.Println(response)
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">if strings.HasPrefix(trimmedInput, "get ") </span><span class="cov0" title="0">{
+                        hashToRetrieve := strings.TrimPrefix(trimmedInput, "get ")
+                        response := cli.nodeCli.HandleCliMessage("get "+hashToRetrieve, "")
+                        fmt.Println(response)
+                        continue</span>
+                }
+
+                // default
+                <span class="cov0" title="0">fmt.Println("Unknown command. Type 'help' for a list of commands.")</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package kademlia
+
+import (
+        "fmt"
+        "strings"
+)
+
+const bucketSize = 20
+
+// RoutingTable definition
+// keeps a refrence contact of me and an array of buckets
+type RoutingTable struct {
+        me      Contact
+        buckets [IDLength * 8]*bucket
+}
+
+// NewRoutingTable returns a new instance of a RoutingTable
+func NewRoutingTable(me Contact) *RoutingTable <span class="cov3" title="5">{
+        routingTable := &amp;RoutingTable{}
+        for i := 0; i &lt; IDLength*8; i++ </span><span class="cov10" title="800">{
+                routingTable.buckets[i] = newBucket()
+        }</span>
+        <span class="cov3" title="5">routingTable.me = me
+        return routingTable</span>
+}
+
+// AddContact add a new contact to the correct Bucket
+func (routingTable *RoutingTable) AddContact(contact Contact) <span class="cov4" title="11">{
+        bucketIndex := routingTable.getBucketIndex(contact.ID)
+        bucket := routingTable.buckets[bucketIndex]
+        bucket.AddContact(contact)
+}</span>
+
+// FindClosestContacts finds the count closest Contacts to the target in the RoutingTable
+func (routingTable *RoutingTable) FindClosestContacts(target *KademliaID, count int) []Contact <span class="cov3" title="5">{
+        var candidates ContactCandidates
+        bucketIndex := routingTable.getBucketIndex(target)
+        bucket := routingTable.buckets[bucketIndex]
+
+        candidates.Append(bucket.GetContactAndCalcDistance(target))
+
+        for i := 1; (bucketIndex-i &gt;= 0 || bucketIndex+i &lt; IDLength*8) &amp;&amp; candidates.Len() &lt; count; i++ </span><span class="cov9" title="793">{
+                if bucketIndex-i &gt;= 0 </span><span class="cov7" title="161">{
+                        bucket = routingTable.buckets[bucketIndex-i]
+                        candidates.Append(bucket.GetContactAndCalcDistance(target))
+                }</span>
+                <span class="cov9" title="793">if bucketIndex+i &lt; IDLength*8 </span><span class="cov9" title="634">{
+                        bucket = routingTable.buckets[bucketIndex+i]
+                        candidates.Append(bucket.GetContactAndCalcDistance(target))
+                }</span>
+        }
+
+        <span class="cov3" title="5">candidates.Sort()
+
+        if count &gt; candidates.Len() </span><span class="cov3" title="5">{
+                count = candidates.Len()
+        }</span>
+
+        <span class="cov3" title="5">return candidates.GetContacts(count)</span>
+}
+
+// getBucketIndex get the correct Bucket index for the KademliaID
+func (routingTable *RoutingTable) getBucketIndex(id *KademliaID) int <span class="cov4" title="17">{
+        distance := id.CalcDistance(routingTable.me.ID)
+        for i := 0; i &lt; IDLength; i++ </span><span class="cov6" title="74">{
+                for j := 0; j &lt; 8; j++ </span><span class="cov9" title="499">{
+                        if (distance[i]&gt;&gt;uint8(7-j))&amp;0x1 != 0 </span><span class="cov4" title="14">{
+                                return i*8 + j
+                        }</span>
+                }
+        }
+
+        <span class="cov2" title="3">return IDLength*8 - 1</span>
+}
+
+// PrintBuckets prints the contacts in all the buckets of the routing table.
+func (routingTable *RoutingTable) PrintBuckets() string <span class="cov1" title="2">{
+        var result strings.Builder
+
+        for i, bucket := range routingTable.buckets </span><span class="cov8" title="320">{
+                if bucket == nil || bucket.list.Len() == 0 </span><span class="cov8" title="320">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">result.WriteString(fmt.Sprintf("Bucket %d:\n", i))
+
+                for e := bucket.list.Front(); e != nil; e = e.Next() </span><span class="cov0" title="0">{
+                        contact := e.Value.(Contact)
+                        result.WriteString(fmt.Sprintf("  ID: %s, Address: %s\n", contact.ID.String(), contact.Address))
+                }</span>
+        }
+
+        <span class="cov1" title="2">output := result.String()
+        if len(output) &gt; 0 &amp;&amp; output[len(output)-1] == '\n' </span><span class="cov0" title="0">{
+                output = output[:len(output)-1]
+        }</span>
+
+        <span class="cov1" title="2">return output</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
