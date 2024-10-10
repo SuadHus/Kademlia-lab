@@ -35,6 +35,8 @@ func main() {
 		fmt.Println("CONTACT_ADDRESS not set in environment")
 	}
 
+	// keep the node running
+	select {}
 }
 
 func cli(myKademlia *kademlia.Kademlia) {
