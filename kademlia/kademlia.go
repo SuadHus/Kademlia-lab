@@ -24,22 +24,21 @@ type RoutingTableAction struct {
 	Contact    *Contact
 	TargetID   *KademliaID
 	ResponseCh chan RoutingTableResponse
-	ActionType string
-	Contact    *Contact
-	TargetID   *KademliaID
-	ResponseCh chan RoutingTableResponse
 }
 
 type RoutingTableResponse struct {
 	ClosestContacts    []Contact
 	routingTableString string
-	ClosestContacts    []Contact
-	routingTableString string
+}
+
+type DataStoreAction struct {
+	ActionType string
+	Key        string
+	Value      []byte
+	ResponseCh chan DataStoreResponse
 }
 
 type DataStoreResponse struct {
-	Value   []byte
-	Success bool
 	Value   []byte
 	Success bool
 }
