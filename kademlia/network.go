@@ -13,7 +13,6 @@ type Network struct {
 	handler   MessageHandler
 }
 
-// interface to force whatever handler is to implement the HandleMessage func
 type MessageHandler interface {
 	HandleMessage(message string, senderAddr string) string
 }
@@ -58,7 +57,6 @@ func (network *Network) parseConnection(conn net.Conn) {
 		return
 	}
 
-	// all nodes set to listen no network traffic on port 8080
 	senderAddress := net.JoinHostPort(remoteIP, "8080")
 
 	if network.handler != nil {

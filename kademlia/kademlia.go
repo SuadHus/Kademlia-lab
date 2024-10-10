@@ -78,7 +78,6 @@ func (kademlia *Kademlia) JoinNetwork(root *Contact) {
 	kademlia.LookupContact(kademlia.Network.LocalID) // lookup on self to populate rt
 }
 
-// routingTableWorker processes routing table actions sequentially.
 func (kademlia *Kademlia) routingTableWorker() {
 	routingTable := NewRoutingTable(NewContact(kademlia.Network.LocalID, kademlia.Network.LocalAddr))
 
@@ -86,7 +85,7 @@ func (kademlia *Kademlia) routingTableWorker() {
 		switch action.ActionType {
 		case "AddContact":
 			routingTable.AddContact(*action.Contact)
-			action.ResponseCh <- RoutingTableResponse{} // Send an empty response to acknowledge completion
+			action.ResponseCh <- RoutingTableResponse{}
 
 		case "FindClosestContacts":
 			closestContacts := routingTable.FindClosestContacts(action.TargetID, bucketSize)
@@ -123,11 +122,10 @@ func (kademlia *Kademlia) PrintRoutingTable() {
 		ResponseCh: responseCh,
 	}
 
-	response := <-responseCh                         // Receive the response from the channel
-	fmt.Println("frog", response.routingTableString) // Print the routing table string
+	response := <-responseCh
+	fmt.Println(response.routingTableString) // Print the routing table string
 }
 
-// HandleMessage implements the MessageHandler interface, recives incoming commands from the network
 func (kademlia *Kademlia) HandleMessage(message string, senderAddr string) string {
 	switch {
 	case strings.HasPrefix(message, "PING"):
@@ -281,7 +279,6 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 	alpha := 3
 	k := bucketSize
 
-	// ask worker thread for 20 closest contacts
 	responseCh := make(chan RoutingTableResponse)
 	kademlia.RoutingTableActionChannel <- RoutingTableAction{
 		ActionType: "FindClosestContacts",
@@ -299,7 +296,6 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 	}
 
 	for {
-		// Find the alpha closest unqueried contacts
 		var unqueriedContacts []Contact
 		for _, contact := range shortlist {
 			if !queried[contact.ID.String()] {
@@ -307,7 +303,6 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 			}
 		}
 
-		// done if no unqueried contacts left
 		if len(unqueriedContacts) == 0 {
 			break
 		}
@@ -321,7 +316,6 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 			closestAlpha = unqueriedContacts[:alpha]
 		}
 
-		// Use WaitGroup to wait for parallel queries to complete
 		var wg sync.WaitGroup
 		resultsChannel := make(chan []Contact, len(closestAlpha))
 
@@ -348,7 +342,6 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 		wg.Wait()
 		close(resultsChannel)
 
-		// Collect results from all parallel queries
 		for contactsReceived := range resultsChannel {
 			for _, newContact := range contactsReceived {
 				if newContact.ID.Equals(kademlia.Network.LocalID) {
@@ -361,7 +354,6 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 		}
 	}
 
-	// Convert the shortlist to a slice and sort it by distance to the target ID
 	var finalClosest []Contact
 	for _, contact := range shortlist {
 		finalClosest = append(finalClosest, contact)
@@ -371,7 +363,6 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 		return finalClosest[i].ID.CalcDistance(targetID).Less(finalClosest[j].ID.CalcDistance(targetID))
 	})
 
-	// Return the k closest contacts
 	if len(finalClosest) > k {
 		finalClosest = finalClosest[:k]
 	}
@@ -429,7 +420,6 @@ func (kademlia *Kademlia) RetrieveData(key string) ([]byte, error) {
 		}
 	}
 
-	// If data not found, return an error
 	return nil, fmt.Errorf("data not found in the network")
 }
 
