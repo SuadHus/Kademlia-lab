@@ -17,6 +17,7 @@ type MessageHandler interface {
 	HandleMessage(message string, senderAddr string) string
 }
 
+// port for incoming traffic is set in Dockerfile and compose file
 func (network *Network) Listen(ip string, port int) {
 	addr := fmt.Sprintf("%s:%d", ip, port)
 	listener, err := net.Listen("tcp", addr)
@@ -57,6 +58,7 @@ func (network *Network) parseConnection(conn net.Conn) {
 		return
 	}
 
+	// all nodes are set to listen on 8080
 	senderAddress := net.JoinHostPort(remoteIP, "8080")
 
 	if network.handler != nil {
@@ -72,7 +74,7 @@ func (network *Network) parseConnection(conn net.Conn) {
 	}
 }
 
-// generic func that sends all command messages type
+// generic send msgs function to send all the messages commands of the network
 func (network *Network) SendMessage(address string, message string) (string, error) {
 
 	//check if port is missing add 8080

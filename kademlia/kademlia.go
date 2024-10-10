@@ -24,26 +24,27 @@ type RoutingTableAction struct {
 	Contact    *Contact
 	TargetID   *KademliaID
 	ResponseCh chan RoutingTableResponse
+	ActionType string
+	Contact    *Contact
+	TargetID   *KademliaID
+	ResponseCh chan RoutingTableResponse
 }
 
 type RoutingTableResponse struct {
 	ClosestContacts    []Contact
 	routingTableString string
-}
-
-type DataStoreAction struct {
-	ActionType string
-	Key        string
-	Value      []byte
-	ResponseCh chan DataStoreResponse
+	ClosestContacts    []Contact
+	routingTableString string
 }
 
 type DataStoreResponse struct {
 	Value   []byte
 	Success bool
+	Value   []byte
+	Success bool
 }
 
-// init function for the kademlia instance
+// init func for kademlia instance
 func NewKademlia(localAddr string) *Kademlia {
 
 	network := &Network{
@@ -58,7 +59,7 @@ func NewKademlia(localAddr string) *Kademlia {
 	}
 
 	cli := &NodeCli{
-		nodeCli: kademlia, // Set the Kademlia instance as the CLI handler
+		nodeCli: kademlia, // set the Kademlia instance as the CLI handler
 	}
 
 	kademlia.NodeCli = cli
@@ -67,7 +68,7 @@ func NewKademlia(localAddr string) *Kademlia {
 	go kademlia.dataStoreWorker()
 	go kademlia.routingTableWorker()
 
-	network.handler = kademlia // in go this works since messages handler is implemented in kademlia
+	network.handler = kademlia // in go the interface is implemented like this since kademlia has the HandleMessages func
 
 	return kademlia
 }
@@ -122,10 +123,11 @@ func (kademlia *Kademlia) PrintRoutingTable() {
 		ResponseCh: responseCh,
 	}
 
-	response := <-responseCh
-	fmt.Println(response.routingTableString) // Print the routing table string
+	response := <-responseCh // Receive the response from the channel
+	fmt.Println(response.routingTableString)
 }
 
+// HandleMessage implements the MessageHandler interface in the Network module
 func (kademlia *Kademlia) HandleMessage(message string, senderAddr string) string {
 	switch {
 	case strings.HasPrefix(message, "PING"):
@@ -213,7 +215,6 @@ func (kademlia *Kademlia) handlePongMessage(message string, senderAddr string) {
 	senderID := NewKademliaID(senderIDStr)
 	senderContact := NewContact(senderID, senderAddr)
 
-	// Create a response channel for this request
 	responseCh := make(chan RoutingTableResponse)
 	kademlia.RoutingTableActionChannel <- RoutingTableAction{
 		ActionType: "AddContact",
@@ -235,7 +236,6 @@ func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr strin
 	targetIDStr := parts[1]
 	targetID := NewKademliaID(targetIDStr)
 
-	// Create a response channel for this request
 	responseCh := make(chan RoutingTableResponse)
 	kademlia.RoutingTableActionChannel <- RoutingTableAction{
 		ActionType: "FindClosestContacts",
@@ -258,7 +258,6 @@ func (kademlia *Kademlia) handleFindNodeMessage(message string, senderAddr strin
 	return responseMessage
 }
 
-// Ping a contact
 func (kademlia *Kademlia) Ping(contact *Contact) {
 	err := kademlia.Network.SendPing(contact)
 	if err != nil {
@@ -452,7 +451,6 @@ func (kademlia *Kademlia) handleStoreMessage(message string, senderAddr string) 
 		return "STORE_ERROR Decoding error"
 	}
 
-	// Use DataStoreActionChannel to store data
 	responseCh := make(chan DataStoreResponse)
 	kademlia.DataStoreActionChannel <- DataStoreAction{
 		ActionType: "Store",
@@ -481,7 +479,6 @@ func (kademlia *Kademlia) handleFindValueMessage(message string, senderAddr stri
 	}
 	hash := parts[1]
 
-	// Use DataStoreActionChannel to retrieve data
 	responseCh := make(chan DataStoreResponse)
 	kademlia.DataStoreActionChannel <- DataStoreAction{
 		ActionType: "Retrieve",
