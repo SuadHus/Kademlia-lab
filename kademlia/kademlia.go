@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strings"
@@ -116,7 +115,7 @@ func (kademlia *Kademlia) dataStoreWorker() {
 
 		case "Store":
 			filePath := dataStorePath + action.Key
-			err := ioutil.WriteFile(filePath, action.Value, 0644)
+			err := os.WriteFile(filePath, action.Value, 0644)
 			if err != nil {
 				action.ResponseCh <- DataStoreResponse{Success: false}
 				fmt.Println("Error writing to file:", err)
@@ -126,7 +125,7 @@ func (kademlia *Kademlia) dataStoreWorker() {
 
 		case "Retrieve":
 			filePath := dataStorePath + action.Key
-			data, err := ioutil.ReadFile(filePath)
+			data, err := os.ReadFile(filePath)
 			if err != nil {
 				if os.IsNotExist(err) {
 					action.ResponseCh <- DataStoreResponse{Value: nil, Success: false}
