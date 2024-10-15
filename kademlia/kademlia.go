@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -98,18 +100,43 @@ func (kademlia *Kademlia) routingTableWorker() {
 	}
 }
 
-// dataStoreWorker processes data store actions sequentially, same design as the rt worker
 func (kademlia *Kademlia) dataStoreWorker() {
-	dataStore := make(map[string][]byte)
+	dataStorePath := "./dataStore/"
+
+	if _, err := os.Stat(dataStorePath); os.IsNotExist(err) {
+		err := os.Mkdir(dataStorePath, os.ModePerm)
+		if err != nil {
+			fmt.Println("Error creating data store directory:", err)
+			return
+		}
+	}
 
 	for action := range kademlia.DataStoreActionChannel {
 		switch action.ActionType {
+
 		case "Store":
-			dataStore[action.Key] = action.Value
-			action.ResponseCh <- DataStoreResponse{Success: true}
+			filePath := dataStorePath + action.Key
+			err := ioutil.WriteFile(filePath, action.Value, 0644)
+			if err != nil {
+				action.ResponseCh <- DataStoreResponse{Success: false}
+				fmt.Println("Error writing to file:", err)
+			} else {
+				action.ResponseCh <- DataStoreResponse{Success: true}
+			}
+
 		case "Retrieve":
-			value, found := dataStore[action.Key]
-			action.ResponseCh <- DataStoreResponse{Value: value, Success: found}
+			filePath := dataStorePath + action.Key
+			data, err := ioutil.ReadFile(filePath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					action.ResponseCh <- DataStoreResponse{Value: nil, Success: false}
+				} else {
+					action.ResponseCh <- DataStoreResponse{Value: nil, Success: false}
+					fmt.Println("Error reading from file:", err)
+				}
+			} else {
+				action.ResponseCh <- DataStoreResponse{Value: data, Success: true}
+			}
 		}
 	}
 }

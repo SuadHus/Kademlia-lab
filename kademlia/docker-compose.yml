@@ -24,7 +24,7 @@ services:
     networks:
       - kademlia_network
     deploy:
-      replicas: 50
+      replicas: 3
     stdin_open: true 
     tty: true       
 
