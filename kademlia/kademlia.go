@@ -314,9 +314,13 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 
 	shortlist := make(map[string]Contact)
 	queried := make(map[string]bool)
+	var closestNode *Contact
 
 	for _, contact := range closestContacts {
 		shortlist[contact.ID.String()] = contact
+		if closestNode == nil || contact.ID.CalcDistance(targetID).Less(closestNode.ID.CalcDistance(targetID)) {
+			closestNode = &contact
+		}
 	}
 
 	for {
@@ -348,24 +352,16 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 			wg.Add(1)
 
 			go func(contact Contact) {
-
 				defer wg.Done()
 				contactsReceived := kademlia.SendFindNode(targetID, &contact)
 
 				resultsChannel <- contactsReceived
-
 			}(contact)
-
-			kademlia.RoutingTableActionChannel <- RoutingTableAction{
-				ActionType: "AddContact",
-				Contact:    &contact,
-				ResponseCh: responseCh,
-			}
-			<-responseCh
 		}
 		wg.Wait()
 		close(resultsChannel)
 
+		closerFound := false
 		for contactsReceived := range resultsChannel {
 			for _, newContact := range contactsReceived {
 				if newContact.ID.Equals(kademlia.Network.LocalID) {
@@ -374,7 +370,23 @@ func (kademlia *Kademlia) LookupContact(targetID *KademliaID) []Contact {
 				if _, exists := shortlist[newContact.ID.String()]; !exists {
 					shortlist[newContact.ID.String()] = newContact
 				}
+
+				kademlia.RoutingTableActionChannel <- RoutingTableAction{
+					ActionType: "AddContact",
+					Contact:    &newContact,
+					ResponseCh: responseCh,
+				}
+				<-responseCh
+
+				if closestNode == nil || newContact.ID.CalcDistance(targetID).Less(closestNode.ID.CalcDistance(targetID)) {
+					closestNode = &newContact
+					closerFound = true
+				}
 			}
+		}
+
+		if !closerFound {
+			break
 		}
 	}
 
